@@ -3,7 +3,7 @@
 /**
  * Init
  * 
- * Inializes both Appwrite API entry point, queue workers, and CLI tasks.
+ * Initializes both Appwrite API entry point, queue workers, and CLI tasks.
  * Set configuration, framework resources, app constants
  * 
  */
@@ -227,6 +227,9 @@ $register->set('queue-functions', function () {
 Locale::$exceptions = false;
 Locale::setLanguage('af', include __DIR__.'/config/locale/translations/af.php');
 Locale::setLanguage('ar', include __DIR__.'/config/locale/translations/ar.php');
+Locale::setLanguage('ba', include __DIR__.'/config/locale/translations/ba.php');
+Locale::setLanguage('be', include __DIR__.'/config/locale/translations/be.php');
+Locale::setLanguage('bg', include __DIR__.'/config/locale/translations/bg.php');
 Locale::setLanguage('bn', include __DIR__.'/config/locale/translations/bn.php');
 Locale::setLanguage('cat', include __DIR__.'/config/locale/translations/cat.php');
 Locale::setLanguage('cz', include __DIR__.'/config/locale/translations/cz.php');
@@ -237,6 +240,7 @@ Locale::setLanguage('fi', include __DIR__.'/config/locale/translations/fi.php');
 Locale::setLanguage('fo', include __DIR__.'/config/locale/translations/fo.php');
 Locale::setLanguage('fr', include __DIR__.'/config/locale/translations/fr.php');
 Locale::setLanguage('gr', include __DIR__.'/config/locale/translations/gr.php');
+Locale::setLanguage('gu', include __DIR__.'/config/locale/translations/gu.php');
 Locale::setLanguage('he', include __DIR__.'/config/locale/translations/he.php');
 Locale::setLanguage('hi', include __DIR__.'/config/locale/translations/hi.php');
 Locale::setLanguage('hu', include __DIR__.'/config/locale/translations/hu.php');
@@ -246,17 +250,22 @@ Locale::setLanguage('is', include __DIR__.'/config/locale/translations/is.php');
 Locale::setLanguage('it', include __DIR__.'/config/locale/translations/it.php');
 Locale::setLanguage('ja', include __DIR__.'/config/locale/translations/ja.php');
 Locale::setLanguage('jv', include __DIR__.'/config/locale/translations/jv.php');
+Locale::setLanguage('ka', include __DIR__.'/config/locale/translations/ka.php');
 Locale::setLanguage('km', include __DIR__.'/config/locale/translations/km.php');
 Locale::setLanguage('ko', include __DIR__.'/config/locale/translations/ko.php');
 Locale::setLanguage('lt', include __DIR__.'/config/locale/translations/lt.php');
 Locale::setLanguage('ml', include __DIR__.'/config/locale/translations/ml.php');
+Locale::setLanguage('mr', include __DIR__.'/config/locale/translations/mr.php');
 Locale::setLanguage('ms', include __DIR__.'/config/locale/translations/ms.php');
 Locale::setLanguage('nl', include __DIR__.'/config/locale/translations/nl.php');
 Locale::setLanguage('no', include __DIR__.'/config/locale/translations/no.php');
+Locale::setLanguage('np', include __DIR__.'/config/locale/translations/np.php');
+Locale::setLanguage('od', include __DIR__.'/config/locale/translations/od.php');
 Locale::setLanguage('ph', include __DIR__.'/config/locale/translations/ph.php');
 Locale::setLanguage('pl', include __DIR__.'/config/locale/translations/pl.php');
 Locale::setLanguage('pt-br', include __DIR__.'/config/locale/translations/pt-br.php');
 Locale::setLanguage('pt-pt', include __DIR__.'/config/locale/translations/pt-pt.php');
+Locale::setLanguage('pa', include __DIR__.'/config/locale/translations/pa.php');
 Locale::setLanguage('ro', include __DIR__.'/config/locale/translations/ro.php');
 Locale::setLanguage('ru', include __DIR__ . '/config/locale/translations/ru.php');
 Locale::setLanguage('si', include __DIR__ . '/config/locale/translations/si.php');
@@ -267,6 +276,7 @@ Locale::setLanguage('ta', include __DIR__ . '/config/locale/translations/ta.php'
 Locale::setLanguage('th', include __DIR__.'/config/locale/translations/th.php');
 Locale::setLanguage('tr', include __DIR__.'/config/locale/translations/tr.php');
 Locale::setLanguage('ua', include __DIR__.'/config/locale/translations/ua.php');
+Locale::setLanguage('ur', include __DIR__.'/config/locale/translations/ur.php');
 Locale::setLanguage('vi', include __DIR__.'/config/locale/translations/vi.php');
 Locale::setLanguage('zh-cn', include __DIR__.'/config/locale/translations/zh-cn.php');
 Locale::setLanguage('zh-tw', include __DIR__.'/config/locale/translations/zh-tw.php');

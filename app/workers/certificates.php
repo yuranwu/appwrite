@@ -20,7 +20,7 @@ class CertificatesV1
 {
     public $args = [];
 
-    public function setUp()
+    public function setUp(): void
     {
     }
 
@@ -52,8 +52,8 @@ class CertificatesV1
         $domain = $this->args['domain'];
 
         // Validation Args
-        $validateTarget = (isset($this->args['validateTarget'])) ? $this->args['validateTarget'] : true;
-        $validateCNAME = (isset($this->args['validateCNAME'])) ? $this->args['validateCNAME'] : true;
+        $validateTarget = $this->args['validateTarget'] ?? true;
+        $validateCNAME = $this->args['validateCNAME'] ?? true;
         
         // Options
         $domain = new Domain((!empty($domain)) ? $domain : '');
@@ -198,7 +198,7 @@ class CertificatesV1
         Authorization::reset();
     }
 
-    public function tearDown()
+    public function tearDown(): void
     {
         // ... Remove environment for this job
     }
