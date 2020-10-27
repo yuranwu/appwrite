@@ -27,12 +27,12 @@ abstract class Adapter
     protected $database = null;
 
     /**
-     * @param $key
-     * @param $value
+     * @param string $key
+     * @param mixed $value
      *
      * @return $this
      */
-    public function setDebug($key, $value)
+    public function setDebug(string $key, $value)
     {
         $this->debug[$key] = $value;
 

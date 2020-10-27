@@ -2,7 +2,6 @@
 
 namespace Appwrite\Database\Validator;
 
-use Appwrite\Database\Document;
 use Utopia\Validator;
 
 class Permissions extends Validator

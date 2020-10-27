@@ -4,11 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-<<<<<<< HEAD
-    "content-hash": "19f7cef86ddc98623cd3ffffa2be2cae",
-=======
     "content-hash": "f86de102bb47a43e41895a78ed3ab991",
->>>>>>> 4b171de4ae3d5ac02bb88a20ed618086f9f24feb
     "packages": [
         {
             "name": "appwrite/php-clamav",
