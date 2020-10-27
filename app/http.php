@@ -93,17 +93,18 @@ $http->on('request', function (SwooleRequest $swooleRequest, SwooleResponse $swo
         return;
     }
 
-    $app = new App('Asia/Tel_Aviv');
+    $app = new App('America/New_York');
     
     try {
         $app->run($request, $response);
     } catch (\Throwable $th) {
+        Console::error('[Error] Type: '.get_class($th));
+        Console::error('[Error] Message: '.$th->getMessage());
+        Console::error('[Error] File: '.$th->getFile());
+        Console::error('[Error] Line: '.$th->getLine());
+
         if(App::isDevelopment()) {
-            var_dump(get_class($th));
-            var_dump($th->getMessage());
-            var_dump($th->getFile());
-            var_dump($th->getLine());
-            $swooleResponse->end('error: '.$th->getMessage() . json_encode($th->getTrace()));
+            $swooleResponse->end('error: '.$th->getMessage());
         }
         
         $swooleResponse->end('500: Server Error');

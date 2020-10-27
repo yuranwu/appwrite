@@ -204,7 +204,7 @@ App::get('/v1/users/:userId/logs')
         /** @var Appwrite\Database\Document $project */
         /** @var Appwrite\Database\Database $projectDB */
         /** @var Utopia\Locale\Locale $locale */
-        /** @var GeoIp2\Database\Reader $geodb */
+        /** @var MaxMind\Db\Reader $geodb */
         
         $user = $projectDB->getDocument(Database::COLLECTION_USERS, $userId);
 
@@ -280,13 +280,14 @@ App::get('/v1/users/:userId/logs')
                 'deviceModel' => $dd->getModel(),
             ]);
 
-            try {
-                $record = $geodb->country($log['ip']);
-                $output[$i]->setAttribute('countryCode', \strtolower($record->country->isoCode));
-                $output[$i]->setAttribute('countryName', (isset($countries[$record->country->isoCode])) ? $countries[$record->country->isoCode] : $locale->getText('locale.country.unknown'));
-            } catch (\Exception $e) {
-                $output[$i]->setAttribute('countryCode', '--');
-                $output[$i]->setAttribute('countryName', $locale->getText('locale.country.unknown'));
+            $record = $geodb->get($log['ip']);
+
+            if ($record) {
+                $output[$i]['countryCode'] = (isset($countries[$record['country']['iso_code']])) ? \strtolower($record['country']['iso_code']) : '--';
+                $output[$i]['countryName'] = (isset($countries[$record['country']['iso_code']])) ? $countries[$record['country']['iso_code']] : $locale->getText('locale.country.unknown');
+            } else {
+                $output[$i]['countryCode'] = '--';
+                $output[$i]['countryName'] = $locale->getText('locale.country.unknown');
             }
         }
 

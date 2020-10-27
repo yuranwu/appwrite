@@ -119,7 +119,7 @@ class Database
     /**
      * Create Namespace.
      *
-     * @param int $namespace
+     * @param string $namespace
      *
      * @return bool
      */
@@ -131,7 +131,7 @@ class Database
     /**
      * Delete Namespace.
      *
-     * @param int $namespace
+     * @param string $namespace
      *
      * @return bool
      */
@@ -193,6 +193,7 @@ class Database
     }
 
     /**
+<<<<<<< HEAD
      * @param array $options
      *
      * @return int
@@ -304,6 +305,18 @@ class Database
     {
         if ($id === '') {
             return new Document([]);
+=======
+     * @param string $id
+     * @param bool $mock is mocked data allowed?
+     * @param bool $decode enable decoding?
+     *
+     * @return Document
+     */
+    public function getDocument($id, bool $mock = true, bool $decode = true)
+    {
+        if (\is_null($id)) {
+            return new Document();
+>>>>>>> 4b171de4ae3d5ac02bb88a20ed618086f9f24feb
         }
 
         if(isset(self::$cache[$this->getNamespace().'/'.$collection.'/'.$id])) {
@@ -324,7 +337,7 @@ class Database
         $validator = new Authorization($document, 'read');
 
         if (!$validator->isValid($document->getPermissions())) { // Check if user has read access to this document
-            return new Document([]);
+            return new Document();
         }
 
         $document = ($decode) ? $this->decode($document) : $document;
@@ -461,14 +474,21 @@ class Database
     }
 
     /**
+<<<<<<< HEAD
      * @param string $collection
+=======
+>>>>>>> 4b171de4ae3d5ac02bb88a20ed618086f9f24feb
      * @param string $id
      *
      * @return Document|false
      *
      * @throws AuthorizationException
      */
+<<<<<<< HEAD
     public function deleteDocument(string $collection, string $id)
+=======
+    public function deleteDocument(string $id)
+>>>>>>> 4b171de4ae3d5ac02bb88a20ed618086f9f24feb
     {
         $document = $this->getDocument($collection, $id);
 
@@ -512,11 +532,44 @@ class Database
     }
 
     /**
+<<<<<<< HEAD
      * @param string $mocks
+=======
+     * @param array $options
      *
-     * @return array
+     * @return int
      */
-    public function setMocks(array $mocks)
+    public function getCount(array $options)
+    {
+        $options = \array_merge([
+            'filters' => [],
+        ], $options);
+
+        $results = $this->adapter->getCount($options);
+
+        return $results;
+    }
+
+    /**
+     * @param string $key
+     * @param string $value
+     *
+     * @return self
+     */
+    public function setMock($key, $value): self
+    {
+        $this->mocks[$key] = $value;
+
+        return $this;
+    }
+
+    /**
+     * @param array $mocks
+>>>>>>> 4b171de4ae3d5ac02bb88a20ed618086f9f24feb
+     *
+     * @return self
+     */
+    public function setMocks(array $mocks): self
     {
         foreach ($mocks as $key => $mock) {
             $this->mocks[$key] = new Document($mock);
@@ -537,14 +590,14 @@ class Database
 
     /**
      * Add Attribute Filter
-     * 
+     *
      * @param string $name
      * @param callable $encode
      * @param callable $decode
-     * 
-     * return $this
+     *
+     * @return void
      */
-    static public function addFilter(string $name, callable $encode, callable $decode)
+    static public function addFilter(string $name, callable $encode, callable $decode): void
     {
         self::$filters[$name] = [
             'encode' => $encode,

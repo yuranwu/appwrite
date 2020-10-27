@@ -337,7 +337,7 @@ class Redis extends Adapter
      *
      * @return Client
      */
-    protected function getRedis():Client
+    protected function getRedis(): Client
     {
         return $this->register->get('cache');
     }

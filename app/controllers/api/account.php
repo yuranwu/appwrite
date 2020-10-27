@@ -137,7 +137,7 @@ App::post('/v1/account/sessions')
         /** @var Appwrite\Utopia\Response $response */
         /** @var Appwrite\Database\Database $projectDB */
         /** @var Utopia\Locale\Locale $locale */
-        /** @var GeoIp2\Database\Reader $geodb */
+        /** @var MaxMind\Db\Reader $geodb */
         /** @var Appwrite\Event\Event $audits */
 
         $protocol = $request->getProtocol();
@@ -200,12 +200,13 @@ App::post('/v1/account/sessions')
             'deviceModel' => $dd->getModel(),
         ]);
 
-        try {
-            $record = $geodb->country($request->getIP());
+        $record = $geodb->get($request->getIP());
+
+        if($record) {
             $session
-                ->setAttribute('countryCode', \strtolower($record->country->isoCode))
+                ->setAttribute('countryCode', \strtolower($record['country']['iso_code']))
             ;
-        } catch (\Exception $e) {
+        } else {
             $session
                 ->setAttribute('countryCode', '--')
             ;
@@ -373,7 +374,7 @@ App::get('/v1/account/sessions/oauth2/:provider/redirect')
         /** @var Appwrite\Database\Document $project */
         /** @var Appwrite\Database\Document $user */
         /** @var Appwrite\Database\Database $projectDB */
-        /** @var GeoIp2\Database\Reader $geodb */
+        /** @var MaxMind\Db\Reader $geodb */
         /** @var Appwrite\Event\Event $audits */
         
         $protocol = $request->getProtocol();
@@ -535,12 +536,13 @@ App::get('/v1/account/sessions/oauth2/:provider/redirect')
             'deviceModel' => $dd->getModel(),
         ]);
 
-        try {
-            $record = $geodb->country($request->getIP());
+        $record = $geodb->get($request->getIP());
+
+        if($record) {
             $session
-                ->setAttribute('countryCode', \strtolower($record->country->isoCode))
+                ->setAttribute('countryCode', \strtolower($record['country']['iso_code']))
             ;
-        } catch (\Exception $e) {
+        } else {
             $session
                 ->setAttribute('countryCode', '--')
             ;
@@ -682,7 +684,7 @@ App::get('/v1/account/logs')
         /** @var Appwrite\Database\Document $project */
         /** @var Appwrite\Database\Document $user */
         /** @var Utopia\Locale\Locale $locale */
-        /** @var GeoIp2\Database\Reader $geodb */
+        /** @var MaxMind\Db\Reader $geodb */
 
         $adapter = new AuditAdapter($register->get('db'));
         $adapter->setNamespace('app_'.$project->getId());
@@ -751,14 +753,16 @@ App::get('/v1/account/logs')
                 'deviceModel' => $dd->getModel(),
             ]);
 
-            try {
-                $record = $geodb->country($log['ip']);
-                $output[$i]->setAttribute('countryCode', \strtolower($record->country->isoCode));
-                $output[$i]->setAttribute('countryName', (isset($countries[$record->country->isoCode])) ? $countries[$record->country->isoCode] : $locale->getText('locale.country.unknown'));
-            } catch (\Exception $e) {
-                $output[$i]->setAttribute('countryCode', '--');
-                $output[$i]->setAttribute('countryName', $locale->getText('locale.country.unknown'));
+            $record = $geodb->get($log['ip']);
+
+            if ($record) {
+                $output[$i]['countryCode'] = (isset($countries[$record['country']['iso_code']])) ? \strtolower($record['country']['iso_code']) : '--';
+                $output[$i]['countryName'] = (isset($countries[$record['country']['iso_code']])) ? $countries[$record['country']['iso_code']] : $locale->getText('locale.country.unknown');
+            } else {
+                $output[$i]['countryCode'] = '--';
+                $output[$i]['countryName'] = $locale->getText('locale.country.unknown');
             }
+
         }
 
         $response->dynamic(new Document(['logs' => $output]), Response::MODEL_LOG_LIST);

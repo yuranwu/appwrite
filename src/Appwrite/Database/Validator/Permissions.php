@@ -2,6 +2,7 @@
 
 namespace Appwrite\Database\Validator;
 
+use Appwrite\Database\Document;
 use Utopia\Validator;
 
 class Permissions extends Validator
@@ -28,7 +29,7 @@ class Permissions extends Validator
      *
      * Returns true if valid or false if not.
      *
-     * @param array $value
+     * @param mixed $value
      *
      * @return bool
      */

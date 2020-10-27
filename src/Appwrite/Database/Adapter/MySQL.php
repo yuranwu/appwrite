@@ -209,7 +209,7 @@ class MySQL extends Adapter
     {
         $order = 0;
         $data = \array_merge(['$id' => null, '$permissions' => []], $data); // Merge data with default params
-        $signature = \md5(\json_encode($data, true));
+        $signature = \md5(\json_encode($data));
         $revision = \uniqid('', true);
         $data['$id'] = (empty($data['$id'])) ? null : $data['$id'];
 
@@ -302,6 +302,10 @@ class MySQL extends Adapter
 
             // Handle array of relations
             if (self::DATA_TYPE_ARRAY === $type) {
+                if(!is_array($value)) { // Property should be of type array, if not = skip
+                    continue;
+                }
+
                 foreach ($value as $i => $child) {
                     if (self::DATA_TYPE_DICTIONARY !== $this->getDataType($child)) { // not dictionary
 
@@ -840,8 +844,10 @@ class MySQL extends Adapter
 
     /**
      * Get Unique Document ID.
+     *
+     * @return string
      */
-    public function getId()
+    public function getId(): string
     {
         return \uniqid();
     }
@@ -936,11 +942,42 @@ class MySQL extends Adapter
     }
 
     /**
+     * @param string $key
+     * @param mixed $value
+     *
+     * @return $this
+     */
+    public function setDebug(string $key, $value): self
+    {
+        $this->debug[$key] = $value;
+
+        return $this;
+    }
+
+    /**
+     * @return array
+     */
+    public function getDebug(): array
+    {
+        return $this->debug;
+    }
+
+    /**
+     * return $this;.
+     *
+     * @return void
+     */
+    public function resetDebug(): void
+    {
+        $this->debug = [];
+    }
+
+    /**
      * @return PDO
      *
      * @throws Exception
      */
-    protected function getPDO()
+    protected function getPDO(): PDO
     {
         return $this->register->get('db');
     }
@@ -950,7 +987,7 @@ class MySQL extends Adapter
      *
      * @return Client
      */
-    protected function getRedis():Client
+    protected function getRedis(): Client
     {
         return $this->register->get('cache');
     }
