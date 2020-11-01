@@ -28,7 +28,6 @@ include_once __DIR__ . '/../shared/api.php';
  *  - Limit amount of users subscribed
  *  - Limit read access
  *  - Limit write access
- *  - Type (Slack, Email, Telegram, ...)
  *  - Credentials (JSON, validate per type)
  *  - Events?
  */
@@ -68,17 +67,14 @@ include_once __DIR__ . '/../shared/api.php';
  *  3. Number of total subscribers
  */
 
+// Channels:
 // POST /messaging/channels
-// POST /messaging/channels/telegram
-// POST /messaging/channels/slack
-// POST /messaging/channels/email (built-in)
-// POST /messaging/channels/stream (built-in)
 // GET /messaging/channels
 // GET /messaging/channels/:id
 // PATCH /messaging/channels/:id
 // DELETE /messaging/channels/:id
 
-// POST /messaging/channels/:id/subscription
+// Subscriptions:
 // POST /messaging/channels/:id/subscription/telegram
 // POST /messaging/channels/:id/subscription/slack
 // POST /messaging/channels/:id/subscription/email (built-in)
@@ -88,12 +84,12 @@ include_once __DIR__ . '/../shared/api.php';
 // PATCH /messaging/channels/:id/subscription/:id
 // DELETE /messaging/channels/:id/subscription/:id
 
-// POST /messaging/channels/messages
-// POST /messaging/channels/messages/telegram
-// POST /messaging/channels/messages/slack
-// POST /messaging/channels/messages/email (built-in)
-// POST /messaging/channels/messages/stream (built-in)
-// GET /messaging/channels/messages
+// Messages:
+// POST /messaging/channels/:id/messages/telegram
+// POST /messaging/channels/:id/messages/slack
+// POST /messaging/channels/:id/messages/email (built-in)
+// POST /messaging/channels/:id/messages/stream (built-in)
+// GET /messaging/channels/:id/messages
 // GET /messaging/channels/:id/messages/:id
 // PATCH /messaging/channels/:id/messages:/:id
 // DELETE /messaging/channels/:id/messages/:id
