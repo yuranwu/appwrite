@@ -1,11 +1,6 @@
-#!/bin/env php
 <?php
 
-require_once __DIR__.'/../../vendor/autoload.php';
-require_once __DIR__.'/../../app/init.php';
-
 use Utopia\Config\Config;
-use Utopia\CLI\CLI;
 use Utopia\CLI\Console;
 use Appwrite\Spec\Swagger2;
 use Appwrite\SDK\SDK;
@@ -16,17 +11,14 @@ use Appwrite\SDK\Language\Python;
 use Appwrite\SDK\Language\Ruby;
 use Appwrite\SDK\Language\Dart;
 use Appwrite\SDK\Language\Deno;
+use Appwrite\SDK\Language\Flutter;
 use Appwrite\SDK\Language\Go;
 use Appwrite\SDK\Language\Java;
-
-$cli = new CLI();
-
-$version = APP_VERSION_STABLE; // Server version
-$warning = '**This SDK is compatible with Appwrite server version ' . $version . '. For older versions, please check previous releases.**';
+use Appwrite\SDK\Language\Swift;
 
 $cli
-    ->task('generate')
-    ->action(function () use ($warning, $version) {
+    ->task('sdks')
+    ->action(function () {
         function getSSLPage($url)
         {
             $ch = \curl_init();
@@ -43,8 +35,14 @@ $cli
 
         $platforms = Config::getParam('platforms');
         $selected = \strtolower(Console::confirm('Choose SDK ("*" for all):'));
+        $version = Console::confirm('Choose an Appwrite version');
         $message = Console::confirm('Please enter your commit message:');
         $production = (Console::confirm('Type "Appwrite" to deploy for production') == 'Appwrite');
+        $warning = '**This SDK is compatible with Appwrite server version ' . $version . '. For older versions, please check previous releases.**';
+
+        if(!in_array($version, ['0.6.2', '0.7.0'])) {
+            throw new Exception('Unknown version given');
+        }
 
         foreach($platforms as $key => $platform) {
             foreach($platform['languages'] as $language) {
@@ -57,11 +55,9 @@ $cli
                     continue;
                 }
 
-                Console::info('Fetching API Spec for '.$language['name'].' for '.$platform['name']);
+                Console::info('Fetching API Spec for '.$language['name'].' for '.$platform['name'] . ' (version: '.$version.')');
                 
-                //$spec = getSSLPage('http://localhost/v1/open-api-2.json?extensions=1&platform='.$language['family']);
-                $spec = getSSLPage('https://appwrite.io/v1/open-api-2.json?extensions=1&platform='.$language['family']);
-                $spec = getSSLPage('https://localhost/v1/open-api-2.json?extensions=1&platform='.$language['family']);
+                $spec = file_get_contents(__DIR__.'/../config/specs/'.$version.'.'.$language['family'].'.json');
 
                 $result = \realpath(__DIR__.'/..').'/sdks/'.$key.'-'.$language['key'];
                 $target = \realpath(__DIR__.'/..').'/sdks/git/'.$language['key'].'/';
@@ -89,42 +85,39 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
                 switch ($language['key']) {
                     case 'web':
                         $config = new JS();
-                        $config
-                            ->setNPMPackage('appwrite')
-                            ->setBowerPackage('appwrite')
-                        ;
+                        $config->setNPMPackage('appwrite');
+                        $config->setBowerPackage('appwrite');
                         break;
                     case 'php':
                         $config = new PHP();
-                        $config
-                            ->setComposerVendor('appwrite')
-                            ->setComposerPackage('appwrite')
-                        ;
+                        $config->setComposerVendor('appwrite');
+                        $config->setComposerPackage('appwrite');
                         break;
                     case 'nodejs':
                         $config = new Node();
-                        $config
-                            ->setNPMPackage('node-appwrite')
-                            ->setBowerPackage('appwrite')
-                        ;
+                        $config->setNPMPackage('node-appwrite');
+                        $config->setBowerPackage('appwrite');
                         break;
                     case 'deno':
                         $config = new Deno();
                         break;
                     case 'python':
                         $config = new Python();
-                        $config
-                            ->setPipPackage('appwrite')
-                        ;
+                        $config->setPipPackage('appwrite');
                         $license = 'BSD License'; // license edited due to classifiers in pypi
                     break;
                     case 'ruby':
                         $config = new Ruby();
-                        $config
-                            ->setGemPackage('appwrite')
-                        ;
+                        $config->setGemPackage('appwrite');
                         break;
                     case 'flutter':
+                        $config = new Flutter();
+                        $config->setPackageName('appwrite');
+                        break;
+                    case 'flutter-dev':
+                        $config = new Flutter();
+                        $config->setPackageName('appwrite_dev');
+                        break;
                     case 'dart':
                         $config = new Dart();
                         break;
@@ -133,6 +126,9 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
                         break;
                     case 'java':
                         $config = new Java();
+                        break;
+                    case 'swift':
+                        $config = new Swift();
                         break;
                     default:
                         throw new Exception('Language "'.$language['key'].'" not supported');
@@ -209,5 +205,3 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
         exit();
     });
-
-$cli->run();

@@ -8,9 +8,11 @@
 - Added option to delete team from the console
 - Added option to view team members from the console
 - Added option to join a user to any team from the console
+- Added option to delete user from the API (@TorstenDittmann - #378)
+- Added option to delete user from the console (@PineappleIOnic - #538)
 - Added support for Brotli compression (@PedroCisnerosSantana, @Rohitub222)
 - New UI micro-interactions and CSS fixes (@AnatoleLucet)
-- UI performance & accessibility improvments (#406)
+- UI performance & accessibility improvements (#406)
 - New Doctor CLI to debug the Appwrite server ([#415](https://github.com/appwrite/appwrite/issues/415))
 - All emails are now sent asynchronously for improved performance (@TorstenDittmann)
 - Updated grid for OAuth2 providers list in the console
@@ -19,6 +21,33 @@
 - Upgraded ClamAV container image to version 1.0.11 ([#412](https://github.com/appwrite/appwrite/issues/412))
 - Optimised function execution by using fully-qualified function calls
 - Added support for boolean 'true' and 'false' in query strings alongside 1 and 0
+- Added pagination for projects list on the console home page.
+- Updated storage calculation to match IEC standards
+- Now using Alpine as base Docker image
+- User name max length is now 128 chars and not 100 for better API consistency
+- Team name max length is now 128 chars and not 100 for better API consistency
+- Collection name max length is now 128 chars and not 256 for better API consistency
+- Project name max length is now 128 chars and not 100 for better API consistency
+- Webhook name max length is now 128 chars and not 256 for better API consistency
+- API Key name max length is now 128 chars and not 256 for better API consistency
+- Task name max length is now 128 chars and not 256 for better API consistency
+- Platform name max length is now 128 chars and not 256 for better API consistency
+- Added new locale: Marathi -mr (@spielers)
+- New and consistent response format for all API object + new response examples in the docs
+  - Removed user roles attribute from user object (can be fetched from /v1/teams/memberships) **
+  - Removed type attribute from session object response (used only internally)
+  - ** - might be changed before merging to master
+- Upgraded Traefik image to version 2.3
+- Upgraded Redis Docker image to version 6.0 (alpine)
+- Upgraded Influxdb Docker image to version 1.8 (alpine)
+
+## Breaking Changes (Read before upgrading!)
+- **Deprecated** `first` and `last` query params for documents list route in the database API
+- **Deprecated** Deprectaed Pubjabi Translations ('pn')
+- **Deprecated** `PATCH /account/prefs` is now updating the prefs payload and not just merging it
+- **Deprecated** `PATCH /users/:userId/prefs` is now updating the prefs payload and not just merging it
+- Switched order of limit and offset params in all the SDKs `listDocuments` method for better consistency
+- Default `limit` param value in all the SDKs `listDocuments` method is now 25 for better consistency
 
 ## Bug Fixes
 
@@ -28,27 +57,30 @@
 - Fixed a UI bug preventing float values in numeric fields
 - Fixed scroll positioning when moving rules order up & down
 - Fixed missing validation for database documents key length (32 chars)
-- Grammer fix for pt-br email templates (@rubensdemelo)
+- Grammar fix for pt-br email templates (@rubensdemelo)
 - Fixed update form labels and tooltips for Flutter Android apps
 - Fixed missing custom scopes param for OAuth2 session create API route
-- Fixed wrong JSON validation when creating and updating database documnets
-- Fixed bug where max file size was limited to max of 10MB
+- Fixed wrong JSON validation when creating and updating database documents
+- Fixed bug where max file size was limited to a max of 10MB
 - Fixed bug preventing the deletion of the project logo
 - Fixed Bug when trying to overwrite OAuth cookie in the Flutter SDK
 - Fixed OAuth redirect when using the self-hosted instance default success URL ([#454](https://github.com/appwrite/appwrite/issues/454))
 - Fixed bug denying authentication with Github OAuth provider
 - New OAuth adapter for Box.com
 - New OAuth adapter for PayPal sandbox
+- Fixed a bug making read permission overwrite write permission in some cases
 
 ## Breaking Changes
 - **Deprecated** `first` and `last` query params for documents list route in the database API
-- **Deprecated** Deprectaed Pubjabi Translations ('pn')
+- **Deprecated** Deprecated Punjabi Translations ('pn')
 
 ## Security
 
 - Access to Health API now requires authentication with an API Key with access to `health.read` scope allowed
 - Added option to force HTTPS connection to the Appwrite server (_APP_OPTIONS_FORCE_HTTPS)
 - Now using your `_APP_SYSTEM_EMAIL_ADDRESS` as the email address for issuing and renewing SSL certificates
+- Block iframe access to Appwrite console using the `X-Frame-Options` header.
+- Fixed `roles` param input validator
 
 # Version 0.6.2 (PRE-RELEASE)
 
@@ -141,7 +173,7 @@
 - Allow non-web platform to skip origin header
 - Limited console dashboard to show max 5 alerts at the same time
 - Added more webhooks events
-- Normailized all webhooks event names
+- Normalized all webhooks event names
 - Added support for SameSite cookie option with fallback cookie for old clients
 - Added a new Discord OAuth adapter
 - Added a new Twitch OAuth adapter

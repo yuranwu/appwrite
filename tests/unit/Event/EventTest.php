@@ -2,9 +2,9 @@
 
 namespace Appwrite\Tests;
 
-use Utopia\Request;
 use Appwrite\Event\Event;
 use PHPUnit\Framework\TestCase;
+use Utopia\App;
 
 class EventTest extends TestCase
 {
@@ -18,33 +18,49 @@ class EventTest extends TestCase
      */
     protected $queue = '';
 
-    public function setUp()
+    public function setUp(): void
     {
-        $request = new Request();
-        $redisHost = $request->getServer('_APP_REDIS_HOST', '');
-        $redisPort = $request->getServer('_APP_REDIS_PORT', '');
+        $redisHost = App::getEnv('_APP_REDIS_HOST', '');
+        $redisPort = App::getEnv('_APP_REDIS_PORT', '');
         \Resque::setBackend($redisHost.':'.$redisPort);
         
         $this->queue = 'v1-tests' . uniqid();
         $this->object = new Event($this->queue, 'TestsV1');
     }
 
-    public function tearDown()
+    public function tearDown(): void
     {
     }
 
     public function testParams()
     {
         $this->object
-            ->setParam('key1', 'value1')
-            ->setParam('key2', 'value2')
+            ->setParam('eventKey1', 'eventValue1')
+            ->setParam('eventKey2', 'eventValue2')
         ;
 
         $this->object->trigger();
 
-        $this->assertEquals('value1', $this->object->getParam('key1'));
-        $this->assertEquals('value2', $this->object->getParam('key2'));
-        $this->assertEquals(null, $this->object->getParam('key3'));
+        $this->assertEquals(null, $this->object->getParam('eventKey1'));
+        $this->assertEquals(null, $this->object->getParam('eventKey2'));
+        $this->assertEquals(null, $this->object->getParam('eventKey3'));
         $this->assertEquals(\Resque::size($this->queue), 1);
+    }
+
+    public function testReset()
+    {
+        $this->object
+            ->setParam('eventKey1', 'eventValue1')
+            ->setParam('eventKey2', 'eventValue2')
+        ;
+
+        $this->assertEquals('eventValue1', $this->object->getParam('eventKey1'));
+        $this->assertEquals('eventValue2', $this->object->getParam('eventKey2'));
+
+        $this->object->reset();
+
+        $this->assertEquals(null, $this->object->getParam('eventKey1'));
+        $this->assertEquals(null, $this->object->getParam('eventKey2'));
+        $this->assertEquals(null, $this->object->getParam('eventKey3'));
     }
 }
