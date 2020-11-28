@@ -13,6 +13,7 @@ include 'tasks/install.php';
 include 'tasks/migrate.php';
 include 'tasks/sdks.php';
 include 'tasks/ssl.php';
+include 'tasks/stats.php';
 include 'tasks/vars.php';
 
 $cli
