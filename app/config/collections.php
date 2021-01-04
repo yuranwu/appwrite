@@ -189,6 +189,14 @@ $collections = [
                 'required' => false,
                 'array' => true,
             ],
+            [
+                '$collection' => Database::COLLECTION_RULES,
+                'label' => 'Filter',
+                'key' => 'filter',
+                'type' => Database::VAR_TEXT,
+                'required' => false,
+                'array' => true,
+            ],
         ],
     ],
     Database::COLLECTION_INDEXES => [
@@ -367,6 +375,15 @@ $collections = [
         '$permissions' => ['read' => ['*']],
         'name' => 'Token',
         'rules' => [
+            [
+                '$collection' => Database::COLLECTION_RULES,
+                'label' => 'User ID',
+                'key' => 'userId',
+                'type' => Database::VAR_TEXT,
+                'default' => null,
+                'required' => false,
+                'array' => false,
+            ],
             [
                 '$collection' => Database::COLLECTION_RULES,
                 'label' => 'Type',

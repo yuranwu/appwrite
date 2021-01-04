@@ -8,6 +8,8 @@ use Appwrite\Database\Document;
 use Appwrite\Database\Adapter\MySQL as MySQLAdapter;
 use Appwrite\Database\Adapter\Redis as RedisAdapter;
 use Appwrite\Database\Validator\Authorization;
+use Appwrite\Event\Event;
+use Swoole\Runtime;
 use Utopia\App;
 use Utopia\CLI\Console;
 use Utopia\Config\Config;
@@ -16,10 +18,15 @@ require_once __DIR__.'/../init.php';
 
 \cli_set_process_title('Functions V1 Worker');
 
+Runtime::setHookFlags(SWOOLE_HOOK_ALL);
+
 Console::success(APP_NAME.' functions worker v1 has started');
 
 $environments = Config::getParam('environments');
 
+/**
+ * Warmup Docker Images
+ */
 $warmupStart = \microtime(true);
 
 Co\run(function() use ($environments) {  // Warmup: make sure images are ready to run fast 🚀
@@ -30,9 +37,14 @@ Co\run(function() use ($environments) {  // Warmup: make sure images are ready t
             $stdout = '';
             $stderr = '';
         
-            Console::info('Warming up '.$environment['name'].' environment');
+            Console::info('Warming up '.$environment['name'].' environment...');
         
-            Console::execute('docker pull '.$environment['image'], '', $stdout, $stderr);
+            if(App::isDevelopment()) {
+                Console::execute('docker build '.$environment['build'].' -t '.$environment['image'], '', $stdout, $stderr);
+            }
+            else {
+                Console::execute('docker pull '.$environment['image'], '', $stdout, $stderr);
+            }
         
             if(!empty($stdout)) {
                 Console::log($stdout);
@@ -49,6 +61,60 @@ $warmupEnd = \microtime(true);
 $warmupTime = $warmupEnd - $warmupStart;
 
 Console::success('Finished warmup in '.$warmupTime.' seconds');
+
+/**
+ * List function servers
+ */
+$stdout = '';
+$stderr = '';
+
+$exitCode = Console::execute('docker ps --all --format "name={{.Names}}&status={{.Status}}&labels={{.Labels}}" --filter label=appwrite-type=function'
+    , '', $stdout, $stderr, 30);
+
+$executionStart = \microtime(true);
+
+$exitCode = Console::execute('docker ps --all --format "name={{.Names}}&status={{.Status}}&labels={{.Labels}}" --filter label=appwrite-type=function'
+    , '', $stdout, $stderr, 30);
+
+$executionEnd = \microtime(true);
+
+$list = [];
+$stdout = \explode("\n", $stdout);
+
+\array_map(function($value) use (&$list) {
+    $container = [];
+
+    \parse_str($value, $container);
+
+    if(isset($container['name'])) {
+        // $labels = [];
+        // $temp = explode(',', $container['labels'] ?? []);
+
+        // foreach($temp as &$label) {
+        //     $label = explode('=', $label);
+        //     $labels[$label[0] || 0] = $label[1] || '';
+        // }
+
+        $container = [
+            'name' => $container['name'],
+            'online' => (\substr($container['status'], 0, 2) === 'Up'),
+            'status' => $container['status'],
+            'labels' => $container['labels'],
+        ];
+
+        \array_map(function($value) use (&$container) {
+            $value = \explode('=', $value);
+            
+            if(isset($value[0]) && isset($value[1])) {
+                $container[$value[0]] = $value[1];
+            }
+        }, \explode(',', $container['labels']));
+
+        $list[$container['name']] = $container;
+    }
+}, $stdout);
+
+Console::info(count($list)." functions listed in " . ($executionEnd - $executionStart) . " seconds with exit code {$exitCode}");
 
 /*
  * 1. Get Original Task
@@ -109,11 +175,11 @@ class FunctionsV1
     {
         global $register;
 
-        $projectId = $this->args['projectId'];
-        $functionId = $this->args['functionId'];
-        $executionId = $this->args['executionId'];
-        $trigger = $this->args['trigger'];
-        $event = $this->args['event'];
+        $projectId = $this->args['projectId'] ?? '';
+        $functionId = $this->args['functionId'] ?? '';
+        $executionId = $this->args['executionId'] ?? '';
+        $trigger = $this->args['trigger'] ?? '';
+        $event = $this->args['event'] ?? '';
         $payload = (!empty($this->args['payload'])) ? json_encode($this->args['payload']) : '';
 
         $database = new Database();
@@ -123,7 +189,6 @@ class FunctionsV1
 
         switch ($trigger) {
             case 'event':
-                
                 $limit = 30;
                 $sum = 30;
                 $offset = 0;
@@ -160,24 +225,26 @@ class FunctionsV1
 
                         Console::success('Triggered function: '.$event);
 
-                        $this->execute('event', $projectId, '', $database, $function, $event, $payload);
+                        Swoole\Coroutine\run(function () use ($projectId, $database, $function, $event, $payload) {
+                            $this->execute('event', $projectId, '', $database, $function, $event, $payload);
+                        });
                     }
                 }
                 break;
 
             case 'schedule':
                 /*
-                * 1. Get Original Task
-                * 2. Check for updates
-                *  If has updates skip task and don't reschedule
-                *  If status not equal to play skip task
-                * 3. Check next run date, update task and add new job at the given date
-                * 4. Execute task (set optional timeout)
-                * 5. Update task response to log
-                *      On success reset error count
-                *      On failure add error count
-                *      If error count bigger than allowed change status to pause
-                */
+                 * 1. Get Original Task
+                 * 2. Check for updates
+                 *  If has updates skip task and don't reschedule
+                 *  If status not equal to play skip task
+                 * 3. Check next run date, update task and add new job at the given date
+                 * 4. Execute task (set optional timeout)
+                 * 5. Update task response to log
+                 *      On success reset error count
+                 *      On failure add error count
+                 *      If error count bigger than allowed change status to pause
+                 */
                 
                 break;
 
@@ -187,10 +254,12 @@ class FunctionsV1
                 Authorization::reset();
 
                 if (empty($function->getId()) || Database::COLLECTION_FUNCTIONS != $function->getCollection()) {
-                    throw new Exception('Function not found');
+                    throw new Exception('Function not found ('.$functionId.')');
                 }
 
-                $this->execute($trigger, $projectId, $executionId, $database, $function);
+                Swoole\Coroutine\run(function () use ($trigger, $projectId, $executionId, $database, $function) {
+                    $this->execute($trigger, $projectId, $executionId, $database, $function);
+                });
                 break;
             
             default:
@@ -199,17 +268,22 @@ class FunctionsV1
         }
     }
 
-    public function execute(
-        string $trigger,
-        string $projectId,
-        string $executionId,
-        Database $database,
-        Document $function,
-        string $event = '',
-        string $payload = ''
-    )
+    /**
+     * Execute function tag
+     * 
+     * @param string $trigger
+     * @param string $projectId
+     * @param string $executionId
+     * @param Database $database
+     * @param Database $function
+     * @param string $event
+     * @param string $payload
+     * 
+     * @return void
+     */
+    public function execute(string $trigger, string $projectId, string $executionId, Database $database, Document $function, string $event = '', string $payload = ''): void
     {
-        global $register;
+        global $list;
 
         $environments = Config::getParam('environments');
 
@@ -262,14 +336,9 @@ class FunctionsV1
             'APPWRITE_FUNCTION_TRIGGER' => $trigger,
             'APPWRITE_FUNCTION_ENV_NAME' => $environment['name'],
             'APPWRITE_FUNCTION_ENV_VERSION' => $environment['version'],
+            'APPWRITE_FUNCTION_EVENT' => $event,
+            'APPWRITE_FUNCTION_EVENT_PAYLOAD' => $payload,
         ]);
-
-        if('event' === $trigger) {
-            $vars = \array_merge($vars, [
-                'APPWRITE_FUNCTION_EVENT' => $event,
-                'APPWRITE_FUNCTION_EVENT_PAYLOAD' => $payload,
-            ]);
-        }
 
         \array_walk($vars, function (&$value, $key) {
             $key = $this->filterEnvKey($key);
@@ -299,47 +368,7 @@ class FunctionsV1
             }
         }
 
-        $stdout = '';
-        $stderr = '';
-
-        $executionStart = \microtime(true);
-        
-        $exitCode = Console::execute('docker ps --all --format "name={{.Names}}&status={{.Status}}&labels={{.Labels}}" --filter label=appwrite-type=function'
-        , '', $stdout, $stderr, 30);
-
-        $executionEnd = \microtime(true);
-
-        $list = [];
-        $stdout = \explode("\n", $stdout);
-
-        \array_map(function($value) use (&$list) {
-            $container = [];
-
-            \parse_str($value, $container);
-
-            if(isset($container['name'])) {
-                $container = [
-                    'name' => $container['name'],
-                    'online' => (\substr($container['status'], 0, 2) === 'Up'),
-                    'status' => $container['status'],
-                    'labels' => $container['labels'],
-                ];
-
-                \array_map(function($value) use (&$container) {
-                    $value = \explode('=', $value);
-                    
-                    if(isset($value[0]) && isset($value[1])) {
-                        $container[$value[0]] = $value[1];
-                    }
-                }, \explode(',', $container['labels']));
-
-                $list[$container['name']] = $container;
-            }
-        }, $stdout);
-        
-        Console::info("Functions listed in " . ($executionEnd - $executionStart) . " seconds with exit code {$exitCode}");
-
-        if(isset($list[$container]) && !$list[$container]['online']) {
+        if(isset($list[$container]) && !$list[$container]['online']) { // Remove conatiner if not online
             $stdout = '';
             $stderr = '';
             
@@ -355,17 +384,17 @@ class FunctionsV1
             $stderr = '';
     
             $executionStart = \microtime(true);
-            
+            $executionTime = \time();
+
             $exitCode = Console::execute("docker run \
                 -d \
                 --entrypoint=\"\" \
-                --cpus=4 \
-                --memory=128m \
-                --memory-swap=128m \
-                --rm \
+                --cpus=".App::getEnv('_APP_FUNCTIONS_CPUS', '1')." \
+                --memory=".App::getEnv('_APP_FUNCTIONS_MEMORY', '128')."m \
+                --memory-swap=".App::getEnv('_APP_FUNCTIONS_MEMORY_SWAP', '128')."m \
                 --name={$container} \
                 --label appwrite-type=function \
-                --label appwrite-created=".\time()." \
+                --label appwrite-created=".$executionTime." \
                 --volume {$tagPathTargetDir}:/tmp:rw \
                 --workdir /usr/local/src \
                 ".\implode("\n", $vars)."
@@ -378,7 +407,17 @@ class FunctionsV1
             if($exitCode !== 0) {
                 throw new Exception('Failed to create function environment: '.$stderr);
             }
-    
+
+            $list[$container] = [
+                'name' => $container,
+                'online' => true,
+                'status' => 'Up',
+                'labels' => [
+                    'appwrite-type' => 'function',
+                    'appwrite-created' => $executionTime,
+                ],
+            ];
+
             Console::info("Function created in " . ($executionEnd - $executionStart) . " seconds with exit code {$exitCode}");
         }
         else {
@@ -419,7 +458,7 @@ class FunctionsV1
             throw new Exception('Failed saving execution to DB', 500);
         }
 
-        $usage = $register->get('queue-usage');
+        $usage = new Event('v1-usage', 'UsageV1');
 
         $usage
             ->setParam('projectId', $projectId)
@@ -433,6 +472,18 @@ class FunctionsV1
 
         $usage->trigger();
 
+        $this->cleanup();
+    }
+
+    /**
+     * Cleanup any hanging containers above the allowed max containers.
+     * 
+     * @return void
+     */
+    public function cleanup(): void
+    {
+        global $list;
+
         Console::success(count($list).' running containers counted');
 
         $max = (int) App::getEnv('_APP_FUNCTIONS_CONTAINERS');
@@ -440,33 +491,32 @@ class FunctionsV1
         if(\count($list) > $max) {
             Console::info('Starting containers cleanup');
 
-            $sorted = [];
-            
-            foreach($list as $env) {
-                $sorted[] = [
-                    'name' => $env['name'],
-                    'created' => (int)$env['appwrite-created']
-                ];
-            }
-
-            \usort($sorted, function ($item1, $item2) {
-                return $item1['created'] <=> $item2['created'];
+            \usort($list, function ($item1, $item2) {
+                return (int)($item1['appwrite-created'] ?? 0) <=> (int)($item2['appwrite-created'] ?? 0);
             });
 
-            while(\count($sorted) > $max) {
-                $first = \array_shift($sorted);
+            while(\count($list) > $max) {
+                $first = \array_shift($list);
                 $stdout = '';
                 $stderr = '';
 
-                if(Console::execute("docker stop {$first['name']}", '', $stdout, $stderr, 30) !== 0) {
+                if(Console::execute("docker rm -f {$first['name']}", '', $stdout, $stderr, 30) !== 0) {
                     Console::error('Failed to remove container: '.$stderr);
                 }
-
-                Console::info('Removed container: '.$first['name']);
+                else {
+                    Console::info('Removed container: '.$first['name']);
+                }
             }
         }
     }
 
+    /**
+     * Filter ENV vars
+     * 
+     * @param string $string
+     * 
+     * @return string
+     */
     public function filterEnvKey(string $string): string
     {
         if(empty($this->allowed)) {

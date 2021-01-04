@@ -41,7 +41,7 @@ class Permissions extends Validator
         }
 
         foreach ($value as $action => $roles) {
-            if (!\in_array($action, ['read', 'write'])) {
+            if (!\in_array($action, ['read', 'write', 'execute'])) {
                 $this->message = 'Unknown action ("'.$action.'")';
 
                 return false;
@@ -54,7 +54,7 @@ class Permissions extends Validator
 
             foreach ($roles as $role) {
                 if (!\is_string($role)) {
-                    $this->message = 'Permissions role must be a string';
+                    $this->message = 'Permissions role must be of type string.';
 
                     return false;
                 }

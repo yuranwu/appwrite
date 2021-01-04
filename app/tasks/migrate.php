@@ -30,9 +30,7 @@ $callbacks = [
             $all = $projectDB->find([
                 'limit' => $limit,
                 'offset' => $offset,
-                'orderField' => '$uid',
                 'orderType' => 'DESC',
-                'orderCast' => 'string',
             ]);
 
             $sum = \count($all);

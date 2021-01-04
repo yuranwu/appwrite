@@ -153,7 +153,7 @@ class Database
             'limit' => 15,
             'search' => '',
             'relations' => true,
-            'orderField' => '$id',
+            'orderField' => '',
             'orderType' => 'ASC',
             'orderCast' => 'int',
             'filters' => [],
@@ -193,7 +193,6 @@ class Database
     }
 
     /**
-<<<<<<< HEAD
      * @param array $options
      *
      * @return int
@@ -303,20 +302,8 @@ class Database
      */
     public function getDocument($collection, $id, bool $mock = true, bool $decode = true)
     {
-        if ($id === '') {
-            return new Document([]);
-=======
-     * @param string $id
-     * @param bool $mock is mocked data allowed?
-     * @param bool $decode enable decoding?
-     *
-     * @return Document
-     */
-    public function getDocument($id, bool $mock = true, bool $decode = true)
-    {
         if (\is_null($id)) {
-            return new Document();
->>>>>>> 4b171de4ae3d5ac02bb88a20ed618086f9f24feb
+            return new Document([]);
         }
 
         if(isset(self::$cache[$this->getNamespace().'/'.$collection.'/'.$id])) {
@@ -474,21 +461,14 @@ class Database
     }
 
     /**
-<<<<<<< HEAD
      * @param string $collection
-=======
->>>>>>> 4b171de4ae3d5ac02bb88a20ed618086f9f24feb
      * @param string $id
      *
      * @return Document|false
      *
      * @throws AuthorizationException
      */
-<<<<<<< HEAD
     public function deleteDocument(string $collection, string $id)
-=======
-    public function deleteDocument(string $id)
->>>>>>> 4b171de4ae3d5ac02bb88a20ed618086f9f24feb
     {
         $document = $this->getDocument($collection, $id);
 
@@ -532,25 +512,6 @@ class Database
     }
 
     /**
-<<<<<<< HEAD
-     * @param string $mocks
-=======
-     * @param array $options
-     *
-     * @return int
-     */
-    public function getCount(array $options)
-    {
-        $options = \array_merge([
-            'filters' => [],
-        ], $options);
-
-        $results = $this->adapter->getCount($options);
-
-        return $results;
-    }
-
-    /**
      * @param string $key
      * @param string $value
      *
@@ -565,7 +526,6 @@ class Database
 
     /**
      * @param array $mocks
->>>>>>> 4b171de4ae3d5ac02bb88a20ed618086f9f24feb
      *
      * @return self
      */
@@ -616,13 +576,28 @@ class Database
 
         foreach ($rules as $key => $rule) {
             $key = $rule->getAttribute('key', null);
-            $filters = $rule->getAttribute('filter', null);
+            $type = $rule->getAttribute('type', null);
+            $array = $rule->getAttribute('array', false);
+            $filters = $rule->getAttribute('filter', []);
             $value = $document->getAttribute($key, null);
 
-            if(($value !== null) && is_array($filters)) {
-                foreach ($filters as $filter) {
-                    $value = $this->encodeAttribute($filter, $value);
-                    $document->setAttribute($key, $value);
+            if (($value !== null)) {
+                if ($type === self::VAR_DOCUMENT) {
+                    if($array) {
+                        $list = [];
+                        foreach ($value as $child) {
+                            $list[] = $this->encode($child);
+                        }
+
+                        $document->setAttribute($key, $list);
+                    } else {
+                        $document->setAttribute($key, $this->encode($value));
+                    }
+                } else {
+                    foreach ($filters as $filter) {
+                        $value = $this->encodeAttribute($filter, $value);
+                        $document->setAttribute($key, $value);
+                    }
                 }
             }
         }
@@ -641,13 +616,28 @@ class Database
 
         foreach ($rules as $key => $rule) {
             $key = $rule->getAttribute('key', null);
-            $filters = $rule->getAttribute('filter', null);
+            $type = $rule->getAttribute('type', null);
+            $array = $rule->getAttribute('array', false);
+            $filters = $rule->getAttribute('filter', []);
             $value = $document->getAttribute($key, null);
 
-            if(($value !== null) && is_array($filters)) {
-                foreach (array_reverse($filters) as $filter) {
-                    $value = $this->decodeAttribute($filter, $value);
-                    $document->setAttribute($key, $value);
+            if (($value !== null)) {
+                if ($type === self::VAR_DOCUMENT) {
+                    if($array) {
+                        $list = [];
+                        foreach ($value as $child) {
+                            $list[] = $this->decode($child);
+                        }
+
+                        $document->setAttribute($key, $list);
+                    } else {
+                        $document->setAttribute($key, $this->decode($value));
+                    }
+                } else {
+                    foreach (array_reverse($filters) as $filter) {
+                        $value = $this->decodeAttribute($filter, $value);
+                        $document->setAttribute($key, $value);
+                    }
                 }
             }
         }
@@ -663,7 +653,8 @@ class Database
      */
     static protected function encodeAttribute(string $name, $value)
     {
-        if(!isset(self::$filters[$name])) {
+        if (!isset(self::$filters[$name])) {
+            return $value;
             throw new Exception('Filter not found');
         }
 
@@ -684,7 +675,8 @@ class Database
      */
     static protected function decodeAttribute(string $name, $value)
     {
-        if(!isset(self::$filters[$name])) {
+        if (!isset(self::$filters[$name])) {
+            return $value;
             throw new Exception('Filter not found');
         }
 

@@ -16,27 +16,27 @@ use Appwrite\Database\Validator\Authorization;
 use Appwrite\Network\Validator\Origin;
 use Appwrite\Storage\Device\Local;
 use Appwrite\Storage\Storage;
+use Utopia\CLI\Console;
 
 Config::setParam('domainVerification', false);
 Config::setParam('cookieDomain', 'localhost');
 Config::setParam('cookieSamesite', Response::COOKIE_SAMESITE_NONE);
 
-App::init(function ($utopia, $request, $response, $console, $project, $user, $locale, $webhooks, $audits, $usage, $deletes, $functions, $clients) {
+App::init(function ($utopia, $request, $response, $console, $project, $user, $locale, $events, $audits, $usage, $deletes, $clients) {
     /** @var Utopia\Swoole\Request $request */
     /** @var Appwrite\Utopia\Response $response */
     /** @var Appwrite\Database\Document $console */
     /** @var Appwrite\Database\Document $project */
     /** @var Appwrite\Database\Document $user */
     /** @var Utopia\Locale\Locale $locale */
-    /** @var Appwrite\Event\Event $webhooks */
+    /** @var Appwrite\Event\Event $events */
     /** @var Appwrite\Event\Event $audits */
     /** @var Appwrite\Event\Event $usage */
     /** @var Appwrite\Event\Event $deletes */
     /** @var Appwrite\Event\Event $functions */
+
     /** @var bool $mode */
     /** @var array $clients */
-    
-    Authorization::$roles = ['*'];
 
     $localeParam = (string)$request->getParam('locale', $request->getHeader('x-appwrite-locale', ''));
 
@@ -46,7 +46,7 @@ App::init(function ($utopia, $request, $response, $console, $project, $user, $lo
 
     $route = $utopia->match($request);
 
-    if(!empty($route->getLabel('sdk.platform', [])) && empty($project->getId()) && ($route->getLabel('scope', '') !== 'public')) {
+    if (!empty($route->getLabel('sdk.platform', [])) && empty($project->getId()) && ($route->getLabel('scope', '') !== 'public')) {
         throw new Exception('Missing or unknown project ID', 400);
     }
 
@@ -101,8 +101,8 @@ App::init(function ($utopia, $request, $response, $console, $project, $user, $lo
      * @see https://www.owasp.org/index.php/List_of_useful_HTTP_headers
      */
     if (App::getEnv('_APP_OPTIONS_FORCE_HTTPS', 'disabled') === 'enabled') { // Force HTTPS
-        if($request->getProtocol() !== 'https') {
-           return $response->redirect('https://'.$request->getHostname().$request->getURI());
+        if ($request->getProtocol() !== 'https') {
+            return $response->redirect('https://'.$request->getHostname().$request->getURI());
         }
 
         $response->addHeader('Strict-Transport-Security', 'max-age='.(60 * 60 * 24 * 126)); // 126 days
@@ -128,11 +128,11 @@ App::init(function ($utopia, $request, $response, $console, $project, $user, $lo
     $origin = $request->getOrigin($request->getReferer(''));
     $originValidator = new Origin(\array_merge($project->getAttribute('platforms', []), $console->getAttribute('platforms', [])));
 
-    if(!$originValidator->isValid($origin)
+    if (!$originValidator->isValid($origin)
         && \in_array($request->getMethod(), [Request::METHOD_POST, Request::METHOD_PUT, Request::METHOD_PATCH, Request::METHOD_DELETE])
         && $route->getLabel('origin', false) !== '*'
         && empty($request->getHeader('x-appwrite-key', ''))) {
-            throw new Exception($originValidator->getDescription(), 403);
+        throw new Exception($originValidator->getDescription(), 403);
     }
     
     /*
@@ -172,7 +172,7 @@ App::init(function ($utopia, $request, $response, $console, $project, $user, $lo
      */
     if (null !== $key && $user->isEmpty()) {
         $user = new Document([
-            '$id' => 0,
+            '$id' => '',
             'status' => Auth::USER_STATUS_ACTIVATED,
             'email' => 'app.'.$project->getId().'@service.'.$request->getHostname(),
             'password' => '',
@@ -185,9 +185,10 @@ App::init(function ($utopia, $request, $response, $console, $project, $user, $lo
         Authorization::setDefaultStatus(false);  // Cancel security segmentation for API keys.
     }
 
-    if($user->getId()) {
+    if ($user->getId()) {
         Authorization::setRole('user:'.$user->getId());
     }
+
     Authorization::setRole('role:'.$role);
 
     \array_map(function ($node) {
@@ -221,19 +222,15 @@ App::init(function ($utopia, $request, $response, $console, $project, $user, $lo
     /*
      * Background Jobs
      */
-    $functions
-        ->setParam('projectId', $project->getId())
-        ->setParam('event', $route->getLabel('event', ''))
-        ->setParam('payload', [])
-        ->setParam('functionId', null)
-        ->setParam('executionId', null)
-        ->setParam('trigger', 'event')
-    ;
 
-    $webhooks
+    $events
         ->setParam('projectId', $project->getId())
+        ->setParam('userId', $user->getId())
         ->setParam('event', $route->getLabel('event', ''))
         ->setParam('payload', [])
+        ->setParam('functionId', null)	
+        ->setParam('executionId', null)	
+        ->setParam('trigger', 'event')
     ;
 
     $audits
@@ -259,49 +256,53 @@ App::init(function ($utopia, $request, $response, $console, $project, $user, $lo
     $deletes
         ->setParam('projectId', $project->getId())
     ;
-}, ['utopia', 'request', 'response', 'console', 'project', 'user', 'locale', 'webhooks', 'audits', 'usage', 'deletes', 'functions', 'clients']);
 
-App::shutdown(function ($utopia, $request, $response, $project, $webhooks, $audits, $usage, $deletes, $functions, $mode) {
+}, ['utopia', 'request', 'response', 'console', 'project', 'user', 'locale', 'events', 'audits', 'usage', 'deletes', 'clients']);
+
+App::shutdown(function ($utopia, $request, $response, $project, $events, $audits, $usage, $deletes, $mode) {
     /** @var Utopia\App $utopia */
     /** @var Utopia\Swoole\Request $request */
     /** @var Appwrite\Utopia\Response $response */
     /** @var Appwrite\Database\Document $project */
-    /** @var Appwrite\Event\Event $webhooks */
+    /** @var Appwrite\Event\Event $events */
     /** @var Appwrite\Event\Event $audits */
     /** @var Appwrite\Event\Event $usage */
     /** @var Appwrite\Event\Event $deletes */
     /** @var Appwrite\Event\Event $functions */
     /** @var bool $mode */
 
-    if (!empty($functions->getParam('event'))) {
-        if(empty($functions->getParam('payload'))) {
-            $functions->setParam('payload', $response->getPayload());
+    if (!empty($events->getParam('event'))) {
+        if(empty($events->getParam('payload'))) {
+            $events->setParam('payload', $response->getPayload());
         }
 
-        $functions->trigger();
-    }
+        $webhooks = clone $events;
+        $functions = clone $events;
 
-    if (!empty($webhooks->getParam('event'))) {
-        if(empty($webhooks->getParam('payload'))) {
-            $webhooks->setParam('payload', $response->getPayload());
-        }
+        $webhooks
+            ->setQueue('v1-webhooks')
+            ->setClass('WebhooksV1')
+            ->trigger();
 
-        $webhooks->trigger();
+        $functions
+            ->setQueue('v1-functions')
+            ->setClass('FunctionsV1')
+            ->trigger();
     }
     
     if (!empty($audits->getParam('event'))) {
         $audits->trigger();
     }
     
-    if (!empty($deletes->getParam('document'))) {
+    if (!empty($deletes->getParam('type')) && !empty($deletes->getParam('document'))) {
         $deletes->trigger();
     }
     
     $route = $utopia->match($request);
     
-    if($project->getId()
-        && $mode !== APP_MODE_ADMIN
-        && !empty($route->getLabel('sdk.namespace', null))) { // Don't calculate console usage and admin mode
+    if ($project->getId()
+        && $mode !== APP_MODE_ADMIN //TODO: add check to make sure user is admin
+        && !empty($route->getLabel('sdk.namespace', null))) { // Don't calculate console usage on admin mode
         
         $usage
             ->setParam('networkRequestSize', $request->getSize() + $usage->getParam('storage'))
@@ -309,7 +310,8 @@ App::shutdown(function ($utopia, $request, $response, $project, $webhooks, $audi
             ->trigger()
         ;
     }
-}, ['utopia', 'request', 'response', 'project', 'webhooks', 'audits', 'usage', 'deletes', 'functions', 'mode']);
+
+}, ['utopia', 'request', 'response', 'project', 'events', 'audits', 'usage', 'deletes', 'mode']);
 
 App::options(function ($request, $response) {
     /** @var Utopia\Swoole\Request $request */
@@ -338,13 +340,13 @@ App::error(function ($error, $utopia, $request, $response, $layout, $project) {
     $route = $utopia->match($request);
     $template = ($route) ? $route->getLabel('error', null) : null;
 
-    if(php_sapi_name() === 'cli') {
-        var_dump($route->getMethod());
-        var_dump($route->getURL());
-        var_dump(get_class($error));
-        var_dump($error->getMessage());
-        var_dump($error->getFile());
-        var_dump($error->getLine());
+    if (php_sapi_name() === 'cli') {
+        Console::error('[Error] Method: '.$route->getMethod());
+        Console::error('[Error] URL: '.$route->getURL());
+        Console::error('[Error] Type: '.get_class($error));
+        Console::error('[Error] Message: '.$error->getMessage());
+        Console::error('[Error] File: '.$error->getFile());
+        Console::error('[Error] Line: '.$error->getLine());
     }
 
     $version = App::getEnv('_APP_VERSION', 'UNKNOWN');
@@ -410,14 +412,14 @@ App::error(function ($error, $utopia, $request, $response, $layout, $project) {
     }
 
     $response->dynamic(new Document($output),
-        $utopia->isDevelopment() ? Response::MODEL_ERROR_DEV : Response::MODEL_LOCALE);
-        
+        $utopia->isDevelopment() ? Response::MODEL_ERROR_DEV : Response::MODEL_ERROR);
 }, ['error', 'utopia', 'request', 'response', 'layout', 'project']);
 
 App::get('/manifest.json')
     ->desc('Progressive app manifest file')
     ->label('scope', 'public')
     ->label('docs', false)
+    ->inject('response')
     ->action(function ($response) {
         /** @var Appwrite\Utopia\Response $response */
 
@@ -438,63 +440,67 @@ App::get('/manifest.json')
                 ],
             ],
         ]);
-    }, ['response']);
+    });
 
 App::get('/robots.txt')
     ->desc('Robots.txt File')
     ->label('scope', 'public')
     ->label('docs', false)
+    ->inject('response')
     ->action(function ($response) {
         $template = new View(__DIR__.'/../views/general/robots.phtml');
         $response->text($template->render(false));
-    }, ['response']);
+    });
 
 App::get('/humans.txt')
     ->desc('Humans.txt File')
     ->label('scope', 'public')
     ->label('docs', false)
+    ->inject('response')
     ->action(function ($response) {
         $template = new View(__DIR__.'/../views/general/humans.phtml');
         $response->text($template->render(false));
-    }, ['response']);
+    });
 
 App::get('/.well-known/acme-challenge')
     ->desc('SSL Verification')
     ->label('scope', 'public')
     ->label('docs', false)
+    ->inject('request')
+    ->inject('response')
     ->action(function ($request, $response) {
         $base = \realpath(APP_STORAGE_CERTIFICATES);
         $path = \str_replace('/.well-known/acme-challenge/', '', $request->getParam('q'));
         $absolute = \realpath($base.'/.well-known/acme-challenge/'.$path);
 
-        if(!$base) {
+        if (!$base) {
             throw new Exception('Storage error', 500);
         }
 
-        if(!$absolute) {
+        if (!$absolute) {
             throw new Exception('Unknown path', 404);
         }
 
-        if(!\substr($absolute, 0, \strlen($base)) === $base) {
+        if (!\substr($absolute, 0, \strlen($base)) === $base) {
             throw new Exception('Invalid path', 401);
         }
 
-        if(!\file_exists($absolute)) {
+        if (!\file_exists($absolute)) {
             throw new Exception('Unknown path', 404);
         }
 
         $content = @\file_get_contents($absolute);
 
-        if(!$content) {
+        if (!$content) {
             throw new Exception('Failed to get contents', 500);
         }
 
         $response->text($content);
-    }, ['request', 'response']);
+    });
 
 include_once __DIR__ . '/shared/api.php';
 include_once __DIR__ . '/shared/web.php';
 
-foreach(Config::getParam('services', []) as $service) {
+foreach (Config::getParam('services', []) as $service) {
     include_once $service['controller'];
 }

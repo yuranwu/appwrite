@@ -1,7 +1,8 @@
 <?php
 
-namespace Tests\E2E\Services\Account;
+namespace Tests\E2E\General;
 
+use Exception;
 use Tests\E2E\Client;
 use Tests\E2E\Scopes\ProjectNone;
 use Tests\E2E\Scopes\Scope;
@@ -46,5 +47,106 @@ class HTTPTest extends Scope
         $this->assertEquals('Not Found', $response['body']['message']);
         $this->assertEquals(404, $response['body']['code']);
         $this->assertEquals('dev', $response['body']['version']);
+    }
+
+    public function testManifest()
+    {
+        /**
+         * Test for SUCCESS
+         */
+        $response = $this->client->call(Client::METHOD_GET, '/manifest.json', array_merge([
+            'origin' => 'http://localhost',
+            'content-type' => 'application/json',
+        ]), []);
+
+        $this->assertEquals(200, $response['headers']['status-code']);
+        $this->assertEquals('Appwrite', $response['body']['name']);
+        $this->assertEquals('Appwrite', $response['body']['short_name']);
+        $this->assertEquals('.', $response['body']['start_url']);
+        $this->assertEquals('.', $response['body']['start_url']);
+        $this->assertEquals('https://appwrite.io/', $response['body']['url']);
+        $this->assertEquals('standalone', $response['body']['display']);
+    }
+
+    public function testHumans()
+    {
+        /**
+         * Test for SUCCESS
+         */
+        $response = $this->client->call(Client::METHOD_GET, '/humans.txt', array_merge([
+            'origin' => 'http://localhost',
+        ]), []);
+
+        $this->assertEquals(200, $response['headers']['status-code']);
+        $this->assertStringContainsString('# humanstxt.org/', $response['body']);
+    }
+
+    public function testRobots()
+    {
+        /**
+         * Test for SUCCESS
+         */
+        $response = $this->client->call(Client::METHOD_GET, '/robots.txt', array_merge([
+            'origin' => 'http://localhost',
+        ]), []);
+
+        $this->assertEquals(200, $response['headers']['status-code']);
+        $this->assertStringContainsString('# robotstxt.org/', $response['body']);
+    }
+
+    public function testSpecSwagger2()
+    {
+        $response = $this->client->call(Client::METHOD_GET, '/specs/swagger2?platform=client', [
+            'content-type' => 'application/json',
+        ], []);
+
+        if(!file_put_contents(__DIR__ . '/../../resources/swagger2.json', json_encode($response['body']))) {
+            throw new Exception('Failed to save spec file');
+        }
+
+        $client = new Client();
+        $client->setEndpoint('https://validator.swagger.io');
+
+        /**
+         * Test for SUCCESS
+         */
+        $response = $client->call(Client::METHOD_POST, '/validator/debug', [
+            'content-type' => 'application/json',
+        ], json_decode(file_get_contents(realpath(__DIR__ . '/../../resources/swagger2.json')), true));
+
+        $response['body'] = json_decode($response['body'], true);
+
+        $this->assertEquals(200, $response['headers']['status-code']);
+        $this->assertFalse(isset($response['body']['messages']));
+
+        unlink(realpath(__DIR__ . '/../../resources/swagger2.json'));
+    }
+
+    public function testSpecOpenAPI3()
+    {
+        $response = $this->client->call(Client::METHOD_GET, '/specs/open-api3?platform=client', [
+            'content-type' => 'application/json',
+        ], []);
+
+        if(!file_put_contents(__DIR__ . '/../../resources/open-api3.json', json_encode($response['body']))) {
+            throw new Exception('Failed to save spec file');
+        }
+
+        $client = new Client();
+        $client->setEndpoint('https://validator.swagger.io');
+
+        /**
+         * Test for SUCCESS
+         */
+        $response = $client->call(Client::METHOD_POST, '/validator/debug', [
+            'content-type' => 'application/json',
+        ], json_decode(file_get_contents(realpath(__DIR__ . '/../../resources/open-api3.json')), true));
+
+        $response['body'] = json_decode($response['body'], true);
+
+        $this->assertEquals(200, $response['headers']['status-code']);
+        $this->assertFalse(isset($response['body']['messages']));
+
+        unlink(realpath(__DIR__ . '/../../resources/open-api3.json'));
     }
 }
