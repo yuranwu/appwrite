@@ -78,6 +78,19 @@ App::init(function ($utopia, $request, $response, $console, $project, $user, $lo
     // var_dump('-----------------');
     // var_dump($request->debug());
 
+    /**
+     * 3rd Party Domains
+     * 
+     * Check if client domain and Appwrite domain are using same top-level domain.
+     * 
+     * Some modern browsers like Safari and Firefox will not allow setting 3rd party cookies.
+     * 
+     * To overcome this issue we set the X-Fallback-Cookies header which is
+     *  used for storing the user session on the device localstorage by Appwrite web based SDKs.
+     * 
+     * Best way to overcome this issue is to use the same domain name for Appwrite and the end-client.
+     *  This can be achived by issuing a custom domain for the Appwrite server. Ex: appwrite.myapp.io
+     */
     Config::setParam('domainVerification',
         ($selfDomain->getRegisterable() === $endDomain->getRegisterable()) &&
             $endDomain->getRegisterable() !== '');
@@ -87,8 +100,8 @@ App::init(function ($utopia, $request, $response, $console, $project, $user, $lo
         $request->getHostname() === 'localhost:'.$request->getPort() ||
         (\filter_var($request->getHostname(), FILTER_VALIDATE_IP) !== false)
     )
-        ? null
-        : '.'.$request->getHostname()
+        ? $request->getHostname()
+        : '.'.$request->getHostname() // include subdomain for browsers implementing http://www.faqs.org/rfcs/rfc2109.html
     );
 
     Storage::setDevice('files', new Local(APP_STORAGE_UPLOADS.'/app-'.$project->getId()));
