@@ -19,7 +19,7 @@ trait DatabaseBase
         ]), [
             'name' => 'Actors',
             'read' => ['*'],
-            'write' => ['role:1', 'role:2'],
+            'write' => ['role:member', 'role:admin'],
             'rules' => [
                 [
                     'label' => 'First Name',
@@ -58,7 +58,7 @@ trait DatabaseBase
         ]), [
             'name' => 'Movies',
             'read' => ['*'],
-            'write' => ['role:1', 'role:2'],
+            'write' => ['role:member', 'role:admin'],
             'rules' => [
                 [
                     'label' => 'Name',

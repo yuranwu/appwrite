@@ -15,7 +15,7 @@ use Utopia\Audit\Adapters\MySQL as AuditAdapter;
 
 require_once __DIR__.'/../init.php';
 
-\cli_set_process_title('Deletes V1 Worker');
+Console::title('Deletes V1 Worker');
 
 Console::success(APP_NAME.' deletes worker v1 has started'."\n");
 
@@ -59,7 +59,7 @@ class DeletesV1
                 break;
 
             case DELETE_TYPE_EXECUTIONS:
-                $this->deleteExecutionLogs();
+                $this->deleteExecutionLogs($this->args['timestamp']);
                 break;
 
             case DELETE_TYPE_AUDIT:
@@ -116,15 +116,17 @@ class DeletesV1
         ], $this->getProjectDB($projectId));
     }
 
-    protected function deleteExecutionLogs() 
+    protected function deleteExecutionLogs($timestamp) 
     {
-        $this->deleteForProjectIds(function($projectId) {
+        $this->deleteForProjectIds(function($projectId) use ($timestamp) {
             if (!($projectDB = $this->getProjectDB($projectId))) {
                 throw new Exception('Failed to get projectDB for project '.$projectId);
             }
 
             // Delete Executions
-            $this->deleteByGroup(Database::COLLECTION_EXECUTIONS, [], $projectDB);
+            $this->deleteByGroup(Database::COLLECTION_EXECUTIONS, [
+                'dateCreated<'.$timestamp
+            ], $projectDB);
         });
     }
 
