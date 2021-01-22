@@ -34,10 +34,10 @@ install:
 
 script:
 - docker ps
-- docker-compose logs appwrite
-- docker-compose exec appwrite doctor
-- docker-compose exec appwrite vars
-- docker-compose exec appwrite test
+# - docker-compose logs appwrite
+# - docker-compose exec appwrite doctor
+# - docker-compose exec appwrite vars
+# - docker-compose exec appwrite test
 
 deploy:
   - provider: script
