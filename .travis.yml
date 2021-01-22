@@ -29,7 +29,7 @@ before_install:
 - chmod -R u+x ./.travis-ci
 
 install:
-- docker-compose up -d
+# - docker-compose up -d
 - sleep 10
 
 script:
