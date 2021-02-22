@@ -3,10 +3,14 @@
 global $cli;
 
 use Appwrite\ClamAV\Network;
+use Appwrite\Database\Adapter\MySQL;
+use Appwrite\Database\Adapter\Redis;
+use Appwrite\Database\Database;
 use Utopia\Storage\Device\Local;
 use Utopia\Storage\Storage;
 use Utopia\App;
 use Utopia\CLI\Console;
+use Utopia\Config\Config;
 use Utopia\Domains\Domain;
 
 $cli
@@ -216,21 +220,49 @@ $cli
             }
         }
 
-        try {
-            if(App::isProduction()) {
-                Console::log('');
-                $version = \json_decode(@\file_get_contents(App::getEnv('_APP_HOME', 'http://localhost').'/v1/health/version'), true);
+        Console::log('');
+        Console::log('Checking certificate ('.App::getEnv('_APP_DOMAIN').')...');
 
-                if ($version && isset($version['version'])) {
-                    if(\version_compare($version['version'], App::getEnv('_APP_VERSION', 'UNKNOWN')) === 0) {
-                        Console::info('You are running the latest version of '.APP_NAME.'! 🥳');
-                    }
-                    else {
-                        Console::info('A new version ('.$version['version'].') is available! 🥳'."\n");
-                    }
-                } else {
-                    Console::error('Failed to check for a newer version'."\n");
+        if(!App::isProduction()) {
+            Console::error('🔴 Can\'t generate certificate on dev mode (change _APP_ENV to `production`)');
+        }
+
+        if(empty(App::getEnv('_APP_SYSTEM_SECURITY_EMAIL_ADDRESS'))) {
+            Console::error('🔴 Missing a valid security email (_APP_SYSTEM_SECURITY_EMAIL_ADDRESS)');
+        }
+
+        $consoleDB = new Database();
+        $consoleDB->setAdapter(new Redis(new MySQL($register), $register));
+        $consoleDB->setNamespace('app_console'); // Should be replaced with param if we want to have parent projects
+        $consoleDB->setMocks(Config::getParam('collections', []));
+    
+        $certificate = $consoleDB->getCollectionFirst([
+            'limit' => 1,
+            'offset' => 0,
+            'filters' => [
+                '$collection='.Database::SYSTEM_COLLECTION_CERTIFICATES,
+                'domain='.App::getEnv('_APP_DOMAIN'),
+            ],
+        ]);
+
+        
+
+        var_dump($certificate);
+        var_dump(App::getEnv('_APP_DOMAIN'));
+
+        try {
+            Console::log('');
+            $version = \json_decode(@\file_get_contents(App::getEnv('_APP_HOME', 'http://localhost').'/v1/health/version'), true);
+
+            if ($version && isset($version['version'])) {
+                if(\version_compare($version['version'], App::getEnv('_APP_VERSION', 'UNKNOWN')) === 0) {
+                    Console::info('You are running the latest version of '.APP_NAME.'! 🥳');
                 }
+                else {
+                    Console::info('A new version ('.$version['version'].') is available! 🥳'."\n");
+                }
+            } else {
+                Console::error('Failed to check for a newer version'."\n");
             }
         } catch (\Throwable $th) {
             Console::error('Failed to check for a newer version'."\n");
