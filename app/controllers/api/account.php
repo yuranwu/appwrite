@@ -429,9 +429,120 @@ App::get('/v1/account/sessions/oauth2/:provider/redirect')
             throw new Exception('Failed to obtain access token');
         }
 
-        // $session = handleCreateOAuthSessionRequest($oauth2, $provider, $accessToken, $request, $response, $project, $user, $projectDB, $geodb, $audits);
-        $secret = $session->getAttribute('secret');
+        $oauth2ID = $oauth2->getUserID($accessToken);
+        
+        if (empty($oauth2ID)) {
+            if (!empty($state['failure'])) {
+                $response->redirect($state['failure'], 301, 0);
+            }
 
+            throw new Exception('Missing ID from OAuth2 provider', 400);
+        }
+
+        $current = Auth::tokenVerify($user->getAttribute('tokens', []), Auth::TOKEN_TYPE_LOGIN, Auth::$secret);
+
+        if ($current) {
+            $projectDB->deleteDocument($current); //throw new Exception('User already logged in', 401);
+        }
+
+        $user = (empty($user->getId())) ? $projectDB->getCollectionFirst([ // Get user by provider id
+            'limit' => 1,
+            'filters' => [
+                '$collection='.Database::SYSTEM_COLLECTION_USERS,
+                'oauth2'.\ucfirst($provider).'='.$oauth2ID,
+            ],
+        ]) : $user;
+
+        if (empty($user)) { // No user logged in or with OAuth2 provider ID, create new one or connect with account with same email
+            $name = $oauth2->getUserName($accessToken);
+            $email = $oauth2->getUserEmail($accessToken);
+
+            $user = $projectDB->getCollectionFirst([ // Get user by provider email address
+                'limit' => 1,
+                'filters' => [
+                    '$collection='.Database::SYSTEM_COLLECTION_USERS,
+                    'email='.$email,
+                ],
+            ]);
+
+            if (!$user || empty($user->getId())) { // Last option -> create user alone, generate random password
+                Authorization::disable();
+
+                try {
+                    $user = $projectDB->createDocument([
+                        '$collection' => Database::SYSTEM_COLLECTION_USERS,
+                        '$permissions' => ['read' => ['*'], 'write' => ['user:{self}']],
+                        'email' => $email,
+                        'emailVerification' => true,
+                        'status' => Auth::USER_STATUS_ACTIVATED, // Email should already be authenticated by OAuth2 provider
+                        'password' => Auth::passwordHash(Auth::passwordGenerator()),
+                        'passwordUpdate' => \time(),
+                        'registration' => \time(),
+                        'reset' => false,
+                        'name' => $name,
+                    ], ['email' => $email]);
+                } catch (Duplicate $th) {
+                    throw new Exception('Account already exists', 409);
+                }
+
+                Authorization::enable();
+
+                if (false === $user) {
+                    throw new Exception('Failed saving user to DB', 500);
+                }
+            }
+        }
+
+        if (Auth::USER_STATUS_BLOCKED == $user->getAttribute('status')) { // Account is blocked
+            throw new Exception('Invalid credentials. User is blocked', 401); // User is in status blocked
+        }
+
+        // Create session token, verify user account and update OAuth2 ID and Access Token
+
+        $detector = new Detector($request->getUserAgent('UNKNOWN'));
+        $record = $geodb->get($request->getIP());
+        $secret = Auth::tokenGenerator();
+        $expiry = \time() + Auth::TOKEN_EXPIRATION_LOGIN_LONG;
+        $session = new Document(array_merge([
+            '$collection' => Database::SYSTEM_COLLECTION_TOKENS,
+            '$permissions' => ['read' => ['user:'.$user['$id']], 'write' => ['user:'.$user['$id']]],
+            'userId' => $user->getId(),
+            'type' => Auth::TOKEN_TYPE_LOGIN,
+            'secret' => Auth::hash($secret), // One way hash encryption to protect DB leak
+            'expire' => $expiry,
+            'userAgent' => $request->getUserAgent('UNKNOWN'),
+            'ip' => $request->getIP(),
+            'countryCode' => ($record) ? \strtolower($record['country']['iso_code']) : '--',
+        ], $detector->getOS(), $detector->getClient(), $detector->getDevice()));
+
+        $user
+            ->setAttribute('oauth2'.\ucfirst($provider), $oauth2ID)
+            ->setAttribute('oauth2'.\ucfirst($provider).'AccessToken', $accessToken)
+            ->setAttribute('status', Auth::USER_STATUS_ACTIVATED)
+            ->setAttribute('tokens', $session, Document::SET_TYPE_APPEND)
+        ;
+
+        Authorization::setRole('user:'.$user->getId());
+
+        $user = $projectDB->updateDocument($user->getArrayCopy());
+
+        if (false === $user) {
+            throw new Exception('Failed saving user to DB', 500);
+        }
+
+        $audits
+            ->setParam('userId', $user->getId())
+            ->setParam('event', 'account.sessions.create')
+            ->setParam('resource', 'users/'.$user->getId())
+            ->setParam('data', ['provider' => $provider])
+        ;
+
+        if (!Config::getParam('domainVerification')) {
+            $response
+                ->addHeader('X-Fallback-Cookies', \json_encode([Auth::$cookieName => Auth::encodeSession($user->getId(), $secret)]))
+            ;
+        }
+        
         // Add keys for non-web platforms - TODO - add verification phase to aviod session sniffing
         if (parse_url($state['success'], PHP_URL_PATH) === parse_url($oauthDefaultSuccess, PHP_URL_PATH)) {
             $state['success'] = URLParser::parse($state['success']);
@@ -445,18 +556,28 @@ App::get('/v1/account/sessions/oauth2/:provider/redirect')
         }
 
         $response
+            ->addHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->addHeader('Pragma', 'no-cache')
+            ->addCookie(Auth::$cookieName.'_legacy', Auth::encodeSession($user->getId(), $secret), $expiry, '/', Config::getParam('cookieDomain'), ('https' == $protocol), true, null)
+            ->addCookie(Auth::$cookieName, Auth::encodeSession($user->getId(), $secret), $expiry, '/', Config::getParam('cookieDomain'), ('https' == $protocol), true, Config::getParam('cookieSamesite'))
             ->redirect($state['success'])
         ;
     });
 
 App::post('/v1/account/sessions/oauth2/:provider/from')
-    ->desc('Create Account Session with OAuth2 Access Token')
+    ->desc('Create Account Session with Access Token')
     ->groups(['api', 'account'])
     ->label('event', 'account.sessions.create')
     ->label('scope', 'public')
-    ->label('abuse-limit', 50)
+    ->label('sdk.platform', [APP_PLATFORM_CLIENT])
+    ->label('sdk.namespace', 'account')
+    ->label('sdk.method', 'createAccessTokenSession')
+    ->label('sdk.description', '/docs/references/account/create-session.md')
+    ->label('sdk.response.code', Response::STATUS_CODE_CREATED)
+    ->label('sdk.response.type', Response::CONTENT_TYPE_JSON)
+    ->label('sdk.response.model', Response::MODEL_SESSION)
+    ->label('abuse-limit', 10)
     ->label('abuse-key', 'ip:{ip}')
-    ->label('docs', false)
     ->param('provider', '', new WhiteList(\array_keys(Config::getParam('providers')), true), 'OAuth2 provider.')
     ->param('accessToken', '', new Text(1024), 'OAuth access token.')
     ->inject('request')
@@ -474,31 +595,156 @@ App::post('/v1/account/sessions/oauth2/:provider/from')
         /** @var Appwrite\Database\Database $projectDB */
         /** @var MaxMind\Db\Reader $geodb */
         /** @var Appwrite\Event\Event $audits */
+        
+        $protocol = $request->getProtocol();
+        $callback = $protocol.'://'.$request->getHostname().'/v1/account/sessions/oauth2/callback/'.$provider.'/'.$project->getId();
 
-        $appId = $project->getAttribute('usersOauth2' . \ucfirst($provider) . 'Appid', '');
-        $appSecret = $project->getAttribute('usersOauth2' . \ucfirst($provider) . 'Secret', '{}');
+        $appId = $project->getAttribute('usersOauth2'.\ucfirst($provider).'Appid', '');
+        $appSecret = $project->getAttribute('usersOauth2'.\ucfirst($provider).'Secret', '{}');
 
         if (!empty($appSecret) && isset($appSecret['version'])) {
-            $key = App::getEnv('_APP_OPENSSL_KEY_V' . $appSecret['version']);
+            $key = App::getEnv('_APP_OPENSSL_KEY_V'.$appSecret['version']);
             $appSecret = OpenSSL::decrypt($appSecret['data'], $appSecret['method'], $key, 0, \hex2bin($appSecret['iv']), \hex2bin($appSecret['tag']));
         }
 
-        if (empty($appId) || empty($appSecret)) {
-            throw new Exception('This provider is disabled. Please configure the provider app ID and app secret key from your ' . APP_NAME . ' console to continue.', 412);
-        }
-
-        $classname = 'Appwrite\\Auth\\OAuth2\\' . \ucfirst($provider);
+        $classname = 'Appwrite\\Auth\\OAuth2\\'.\ucfirst($provider);
 
         if (!\class_exists($classname)) {
             throw new Exception('Provider is not supported', 501);
         }
 
-        $oauth2 = new $classname($appId, $appSecret, '', [], []);
+        $oauth2 = new $classname($appId, $appSecret, $callback);
 
-        // $session = handleCreateOAuthSessionRequest($oauth2, $provider, $accessToken, $request, $response, $project, $user, $projectDB, $geodb, $audits);
+        if (empty($accessToken)) {
+            if (!empty($state['failure'])) {
+                $response->redirect($state['failure'], 301, 0);
+            }
 
+            throw new Exception('Failed to obtain access token');
+        }
+
+        $oauth2ID = $oauth2->getUserID($accessToken);
+        
+        if (empty($oauth2ID)) {
+            if (!empty($state['failure'])) {
+                $response->redirect($state['failure'], 301, 0);
+            }
+
+            throw new Exception('Missing ID from OAuth2 provider', 400);
+        }
+
+        $current = Auth::tokenVerify($user->getAttribute('tokens', []), Auth::TOKEN_TYPE_LOGIN, Auth::$secret);
+
+        if ($current) {
+            $projectDB->deleteDocument($current); //throw new Exception('User already logged in', 401);
+        }
+
+        $user = (empty($user->getId())) ? $projectDB->getCollectionFirst([ // Get user by provider id
+            'limit' => 1,
+            'filters' => [
+                '$collection='.Database::SYSTEM_COLLECTION_USERS,
+                'oauth2'.\ucfirst($provider).'='.$oauth2ID,
+            ],
+        ]) : $user;
+
+        if (empty($user)) { // No user logged in or with OAuth2 provider ID, create new one or connect with account with same email
+            $name = $oauth2->getUserName($accessToken);
+            $email = $oauth2->getUserEmail($accessToken);
+
+            $user = $projectDB->getCollectionFirst([ // Get user by provider email address
+                'limit' => 1,
+                'filters' => [
+                    '$collection='.Database::SYSTEM_COLLECTION_USERS,
+                    'email='.$email,
+                ],
+            ]);
+
+            if (!$user || empty($user->getId())) { // Last option -> create user alone, generate random password
+                Authorization::disable();
+
+                try {
+                    $user = $projectDB->createDocument([
+                        '$collection' => Database::SYSTEM_COLLECTION_USERS,
+                        '$permissions' => ['read' => ['*'], 'write' => ['user:{self}']],
+                        'email' => $email,
+                        'emailVerification' => true,
+                        'status' => Auth::USER_STATUS_ACTIVATED, // Email should already be authenticated by OAuth2 provider
+                        'password' => Auth::passwordHash(Auth::passwordGenerator()),
+                        'passwordUpdate' => \time(),
+                        'registration' => \time(),
+                        'reset' => false,
+                        'name' => $name,
+                    ], ['email' => $email]);
+                } catch (Duplicate $th) {
+                    throw new Exception('Account already exists', 409);
+                }
+
+                Authorization::enable();
+
+                if (false === $user) {
+                    throw new Exception('Failed saving user to DB', 500);
+                }
+            }
+        }
+
+        if (Auth::USER_STATUS_BLOCKED == $user->getAttribute('status')) { // Account is blocked
+            throw new Exception('Invalid credentials. User is blocked', 401); // User is in status blocked
+        }
+
+        // Create session token, verify user account and update OAuth2 ID and Access Token
+
+        $detector = new Detector($request->getUserAgent('UNKNOWN'));
+        $record = $geodb->get($request->getIP());
+        $secret = Auth::tokenGenerator();
+        $expiry = \time() + Auth::TOKEN_EXPIRATION_LOGIN_LONG;
+        $session = new Document(array_merge([
+            '$collection' => Database::SYSTEM_COLLECTION_TOKENS,
+            '$permissions' => ['read' => ['user:'.$user['$id']], 'write' => ['user:'.$user['$id']]],
+            'userId' => $user->getId(),
+            'type' => Auth::TOKEN_TYPE_LOGIN,
+            'secret' => Auth::hash($secret), // One way hash encryption to protect DB leak
+            'expire' => $expiry,
+            'userAgent' => $request->getUserAgent('UNKNOWN'),
+            'ip' => $request->getIP(),
+            'countryCode' => ($record) ? \strtolower($record['country']['iso_code']) : '--',
+        ], $detector->getOS(), $detector->getClient(), $detector->getDevice()));
+
+        $user
+            ->setAttribute('oauth2'.\ucfirst($provider), $oauth2ID)
+            ->setAttribute('oauth2'.\ucfirst($provider).'AccessToken', $accessToken)
+            ->setAttribute('status', Auth::USER_STATUS_ACTIVATED)
+            ->setAttribute('tokens', $session, Document::SET_TYPE_APPEND)
+        ;
+
+        Authorization::setRole('user:'.$user->getId());
+
+        $user = $projectDB->updateDocument($user->getArrayCopy());
+
+        if (false === $user) {
+            throw new Exception('Failed saving user to DB', 500);
+        }
+
+        $audits
+            ->setParam('userId', $user->getId())
+            ->setParam('event', 'account.sessions.create')
+            ->setParam('resource', 'users/'.$user->getId())
+            ->setParam('data', ['provider' => $provider])
+        ;
+
+        if (!Config::getParam('domainVerification')) {
+            $response
+                ->addHeader('X-Fallback-Cookies', \json_encode([Auth::$cookieName => Auth::encodeSession($user->getId(), $secret)]))
+            ;
+        }
+        
         $response
-            ->json(['status' => 'OK']);
+            ->addHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->addHeader('Pragma', 'no-cache')
+            ->addCookie(Auth::$cookieName.'_legacy', Auth::encodeSession($user->getId(), $secret), $expiry, '/', Config::getParam('cookieDomain'), ('https' == $protocol), true, null)
+            ->addCookie(Auth::$cookieName, Auth::encodeSession($user->getId(), $secret), $expiry, '/', Config::getParam('cookieDomain'), ('https' == $protocol), true, Config::getParam('cookieSamesite'))
+        ;
+
+        $response->dynamic($session, Response::MODEL_SESSION);
     });
 
 App::post('/v1/account/jwt')
