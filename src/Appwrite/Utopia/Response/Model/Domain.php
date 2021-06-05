@@ -65,6 +65,16 @@ class Domain extends Model
     }
 
     /**
+     * Get Description
+     * 
+     * @return string
+     */
+    public function getDescription():string
+    {
+        return '';
+    }
+
+    /**
      * Get Collection
      * 
      * @return string

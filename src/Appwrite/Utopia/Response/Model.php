@@ -38,6 +38,13 @@ abstract class Model
     abstract public function getName():string;
 
     /**
+     * Get Description
+     * 
+     * @return string
+     */
+    abstract public function getDescription():string;
+
+    /**
      * Get Collection
      * 
      * @return string

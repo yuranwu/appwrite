@@ -370,6 +370,7 @@ class Swagger2 extends Format
 
             $output['definitions'][$model->getType()] = [
                 'description' => $model->getName(),
+                'x-description' => $model->getDescription(),
                 'type' => 'object',
             ];
 

@@ -28,6 +28,16 @@ class Mock extends Model
     {
         return 'Mock';
     }
+    
+    /**
+     * Get Description
+     * 
+     * @return string
+     */
+    public function getDescription():string
+    {
+        return '';
+    }
 
     /**
      * Get Collection

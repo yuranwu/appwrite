@@ -154,6 +154,16 @@ class Session extends Model
     {
         return 'Session';
     }
+    
+    /**
+     * Get Description
+     * 
+     * @return string
+     */
+    public function getDescription():string
+    {
+        return '';
+    }
 
     /**
      * Get Collection
