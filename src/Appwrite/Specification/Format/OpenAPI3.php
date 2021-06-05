@@ -369,6 +369,7 @@ class OpenAPI3 extends Format
             $output['components']['schemas'][$model->getType()] = [
                 'description' => $model->getName(),
                 'x-description' => $model->getDescription(),
+                'x-custom' => $model->isAny(),
                 'type' => 'object',
             ];
 
