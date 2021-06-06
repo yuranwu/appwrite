@@ -67,7 +67,6 @@ services:
       - ./docs:/usr/src/code/docs
       - ./public:/usr/src/code/public
       - ./src:/usr/src/code/src
-      - ./debug:/tmp
     depends_on:
       - mariadb
       - redis
@@ -279,7 +278,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - appwrite-functions:/storage/functions:rw
-      - /tmp:/tmp:rw
       - ./app:/usr/src/code/app
       - ./src:/usr/src/code/src
     depends_on:
