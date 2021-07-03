@@ -4,19 +4,16 @@ use Appwrite\Database\Database;
 use Utopia\View;
 use Appwrite\Database\Validator\Authorization;
 
-$collection = $this->getParam('collection', null);
 $searchFiles = $this->getParam('searchFiles', null);
 $searchDocuments = $this->getParam('searchDocuments', null);
-$name = $collection->getAttribute('name', '');
 $db = $this->getParam('db', null);
-$rules = $collection->getAttribute('rules', []);
 $namespace = 'project-document';
 $collections = [];
 ?>
 
 <?php echo $searchFiles->render(); ?>
 
-<?php foreach($rules as $rule): // Form to append child document
+<?php foreach([] as $rule): // Form to append child document
     $key = $rule['key'] ?? '';
     $label = $rule['label'] ?? '';
     $type = $rule['type'] ?? '';
@@ -47,7 +44,7 @@ $collections = [];
     <?php endforeach; ?>
 <?php endforeach; ?>
 
-<?php foreach($rules as $rule): // Form to append child document
+<?php foreach([] as $rule): // Form to append child document
     $key = $rule['key'] ?? '';
     $label = $rule['label'] ?? '';
     $type = $rule['type'] ?? '';
@@ -125,7 +122,7 @@ $collections = [];
     <?php endforeach; ?>
 <?php endforeach; ?>
 
-<?php foreach($rules as $rule): // Form to remove array $index key
+<?php foreach([] as $rule): // Form to remove array $index key
     $key = $rule['key'] ?? '';
     $label = $rule['label'] ?? '';
     $type = $rule['type'] ?? '';
@@ -163,7 +160,7 @@ $collections = [];
 
     <div class="cover">
         <h1 class="zone xl margin-bottom-large">
-            <a data-ls-attrs="href=/console/database/collection?id={{router.params.collection}}&project={{router.params.project}}" class="back text-size-small link-return-animation--start"><i class="icon-left-open"></i> <?php echo $this->escape($name); ?></a>
+            <a data-ls-attrs="href=/console/database/collection?id={{router.params.collection}}&project={{router.params.project}}" class="back text-size-small link-return-animation--start"><i class="icon-left-open"></i> No name</a>
 
             <br />
 
@@ -215,7 +212,7 @@ $collections = [];
 
                                 <!-- <div class="document-nav" data-forms-nav>
                                     <ul class="text-align-end margin-end-small">
-                                        <?php foreach($rules as $rule): // Form to append child document
+                                        <?php foreach([] as $rule): // Form to append child document
                                             $key = $rule['key'] ?? '';
                                             $label = $rule['label'] ?? '';
                                             $type = $rule['type'] ?? '';
@@ -228,7 +225,7 @@ $collections = [];
                                     </ul>
                                 </div> -->
                                 
-                                <?php if(empty($rules)): ?>
+                                <?php if(empty([])): ?>
                                     <div class="margin-bottom-xl margin-top-xl margin-end margin-start text-align-center">
                                         <h4 class="text-fade text-size-small">No attribute rules added yet.<br /><br /><a data-ls-attrs="href=/console/database/collection/settings?id={{router.params.collection}}&project={{router.params.project}}">Update Collection</a></h4>
                                     </div>

@@ -223,29 +223,15 @@ App::get('/console/database/collection')
     ->groups(['web', 'console'])
     ->label('permission', 'public')
     ->label('scope', 'console')
-    ->param('id', '', new UID(), 'Collection unique ID.')
     ->inject('response')
     ->inject('layout')
     ->inject('projectDB')
-    ->action(function ($id, $response, $layout, $projectDB) {
+    ->action(function ($response, $layout) {
         /** @var Appwrite\Utopia\Response $response */
         /** @var Utopia\View $layout */
-        /** @var Appwrite\Database\Database $projectDB */
-
-        Authorization::disable();
-        $collection = $projectDB->getDocument($id, false);
-        Authorization::reset();
-
-        if ($collection->isEmpty() || Database::SYSTEM_COLLECTION_COLLECTIONS != $collection->getCollection()) {
-            throw new Exception('Collection not found', 404);
-        }
 
         $page = new View(__DIR__.'/../../views/console/database/collection.phtml');
 
-        $page
-            ->setParam('collection', $collection)
-        ;
-        
         $layout
             ->setParam('title', APP_NAME.' - Database Collection')
             ->setParam('body', $page)
@@ -265,24 +251,14 @@ App::get('/console/database/document')
     ->param('collection', '', new UID(), 'Collection unique ID.')
     ->inject('layout')
     ->inject('projectDB')
-    ->action(function ($collection, $layout, $projectDB) {
+    ->action(function ($collection, $layout) {
         /** @var Utopia\View $layout */
-        /** @var Appwrite\Database\Database $projectDB */
-
-        Authorization::disable();
-        $collection = $projectDB->getDocument($collection, false);
-        Authorization::reset();
-
-        if ($collection->isEmpty() || Database::SYSTEM_COLLECTION_COLLECTIONS != $collection->getCollection()) {
-            throw new Exception('Collection not found', 404);
-        }
 
         $page = new View(__DIR__.'/../../views/console/database/document.phtml');
         $searchFiles = new View(__DIR__.'/../../views/console/database/search/files.phtml');
         $searchDocuments = new View(__DIR__.'/../../views/console/database/search/documents.phtml');
 
         $page
-            ->setParam('db', $projectDB)
             ->setParam('collection', $collection)
             ->setParam('searchFiles', $searchFiles)
             ->setParam('searchDocuments', $searchDocuments)
