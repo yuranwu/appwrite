@@ -15,24 +15,17 @@ use Appwrite\Utopia\Response\Filters\V06;
 use Appwrite\Utopia\Response\Filters\V07;
 use Appwrite\Utopia\Response\Filters\V08;
 use Utopia\CLI\Console;
+use Utopia\Database\Database;
 use Utopia\Database\Document;
 use Utopia\Database\Query;
 use Utopia\Database\Validator\Authorization;
+use Utopia\Locale\Locale;
 
 Config::setParam('domainVerification', false);
 Config::setParam('cookieDomain', 'localhost');
 Config::setParam('cookieSamesite', Response::COOKIE_SAMESITE_NONE);
 
-App::init(function ($utopia, $request, $response, $console, $project, $dbForConsole, $user, $locale, $clients) {
-    /** @var Utopia\Swoole\Request $request */
-    /** @var Appwrite\Utopia\Response $response */
-    /** @var Utopia\Database\Database $dbForConsole */
-    /** @var Utopia\Database\Document $console */
-    /** @var Utopia\Database\Document $project */
-    /** @var Utopia\Database\Document $user */
-    /** @var Utopia\Locale\Locale $locale */
-    /** @var array $clients */
-
+App::init(function (App $utopia, Request $request, Response $response, Document $console, Document $project, Database $dbForConsole, Document $user, Locale $locale, array $clients) {
     $domain = $request->getHostname();
     $domains = Config::getParam('domains', []);
     if (!array_key_exists($domain, $domains)) {
@@ -246,7 +239,7 @@ App::init(function ($utopia, $request, $response, $console, $project, $dbForCons
 
     Authorization::setRole('role:'.$role);
 
-    \array_map(function ($node) {
+    \array_map(function (Document $node) {
         if (isset($node['teamId']) && isset($node['roles'])) {
             Authorization::setRole('team:'.$node['teamId']);
 

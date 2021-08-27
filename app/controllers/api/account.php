@@ -5,6 +5,7 @@ use Appwrite\Auth\Auth;
 use Appwrite\Auth\Validator\Password;
 use Appwrite\Database\Validator\CustomId;
 use Appwrite\Detector\Detector;
+use Appwrite\Event\Event;
 use Appwrite\Network\Validator\Email;
 use Appwrite\Network\Validator\Host;
 use Appwrite\Network\Validator\URL;
@@ -15,12 +16,14 @@ use Appwrite\Utopia\Response;
 use Utopia\App;
 use Utopia\Audit\Audit;
 use Utopia\Config\Config;
+use Utopia\Database\Database;
 use Utopia\Database\Document;
 use Utopia\Database\Exception\Duplicate;
 use Utopia\Database\Query;
 use Utopia\Database\Validator\Authorization;
 use Utopia\Database\Validator\UID;
 use Utopia\Exception;
+use Utopia\Swoole\Request;
 use Utopia\Validator\ArrayList;
 use Utopia\Validator\Assoc;
 use Utopia\Validator\Text;
@@ -52,13 +55,7 @@ App::post('/v1/account')
     ->inject('project')
     ->inject('dbForInternal')
     ->inject('audits')
-    ->action(function ($userId, $email, $password, $name, $request, $response, $project, $dbForInternal, $audits) {
-        /** @var Utopia\Swoole\Request $request */
-        /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Document $project */
-        /** @var Utopia\Database\Database $dbForInternal */
-        /** @var Appwrite\Event\Event $audits */
-
+    ->action(function (string $userId, string $email, string $password, string $name, Request $request, Response $response, Document $project, Database $dbForInternal, Event $audits) {
         $email = \strtolower($email);
         if ('console' === $project->getId()) {
             $whitelistEmails = $project->getAttribute('authWhitelistEmails');

@@ -249,7 +249,7 @@ App::get('/v1/locale/languages')
 
         $list = Config::getParam('locale-languages');
 
-        $list = array_map(function($node) {
+        $list = array_map(function(array $node) {
             return new Document($node);
         }, $list);
 
