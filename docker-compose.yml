@@ -39,8 +39,6 @@ services:
         - DEBUG=false
         - TESTING=true
         - VERSION=db-alpha
-    ports: 
-      - 9501:80
     networks:
       - appwrite
     labels:
@@ -130,8 +128,6 @@ services:
     build:
       context: .
     restart: unless-stopped
-    ports: 
-      - 9505:80
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label-stack=appwrite"
