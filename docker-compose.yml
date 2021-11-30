@@ -38,7 +38,7 @@ services:
       args:
         - DEBUG=false
         - TESTING=true
-        - VERSION=dev
+        - VERSION=db-alpha
     ports: 
       - 9501:80
     networks:
