@@ -10,8 +10,6 @@ services:
     image: traefik:2.5
     container_name: appwrite-traefik
     command:
-      - --log.level=DEBUG
-      - --api.insecure=true
       - --providers.file.directory=/storage/config
       - --providers.file.watch=true
       - --providers.docker=true
@@ -23,7 +21,6 @@ services:
     ports:
       - 80:80
       - 443:443
-      - 9500:8080
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - appwrite-config:/storage/config:ro
@@ -33,7 +30,7 @@ services:
     networks:
       - gateway
       - appwrite
-  
+
   appwrite:
     container_name: appwrite
     build:
