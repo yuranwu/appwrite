@@ -131,7 +131,6 @@ services:
     container_name: appwrite-realtime
     build:
       context: .
-    restart: unless-stopped
     ports: 
       - 9505:80
     labels:
@@ -149,6 +148,48 @@ services:
       - traefik.http.routers.appwrite_realtime_wss.service=appwrite_realtime
       - traefik.http.routers.appwrite_realtime_wss.tls=true
       - traefik.http.routers.appwrite_realtime_wss.tls.certresolver=dns
+    networks:
+      - appwrite
+    volumes:
+      - ./app:/usr/src/code/app
+      - ./src:/usr/src/code/src
+    depends_on:
+      - redis
+    environment:
+      - _APP_ENV
+      - _APP_OPTIONS_ABUSE
+      - _APP_OPENSSL_KEY_V1
+      - _APP_REDIS_HOST
+      - _APP_REDIS_PORT
+      - _APP_DB_HOST
+      - _APP_DB_PORT
+      - _APP_DB_SCHEMA
+      - _APP_DB_USER
+      - _APP_DB_PASS
+      - _APP_USAGE_STATS
+
+  appwrite-dns:
+    entrypoint: dns
+    container_name: appwrite-dns
+    build:
+      context: .
+    ports: 
+      - 8053:8053/udp
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.constraint-label-stack=appwrite"
+    #   - "traefik.docker.network=appwrite"
+    #   - "traefik.http.services.appwrite_realtime.loadbalancer.server.port=80"
+    #   #ws
+    #   - traefik.http.routers.appwrite_realtime_ws.entrypoints=appwrite_web
+    #   - traefik.http.routers.appwrite_realtime_ws.rule=PathPrefix(`/v1/realtime`)
+    #   - traefik.http.routers.appwrite_realtime_ws.service=appwrite_realtime
+    #   # wss
+    #   - traefik.http.routers.appwrite_realtime_wss.entrypoints=appwrite_websecure
+    #   - traefik.http.routers.appwrite_realtime_wss.rule=PathPrefix(`/v1/realtime`)
+    #   - traefik.http.routers.appwrite_realtime_wss.service=appwrite_realtime
+    #   - traefik.http.routers.appwrite_realtime_wss.tls=true
+    #   - traefik.http.routers.appwrite_realtime_wss.tls.certresolver=dns
     networks:
       - appwrite
     volumes:
@@ -460,7 +501,6 @@ services:
   # smtp:
   #   image: appwrite/smtp:1.2.0
   #   container_name: appwrite-smtp
-  #   restart: unless-stopped
   #   networks:
   #     - appwrite
   #   environment:
@@ -544,7 +584,6 @@ services:
 
   # redis-commander:
   #   image: rediscommander/redis-commander:latest
-  #   restart: unless-stopped
   #   networks:
   #   - appwrite
   #   environment:
@@ -554,7 +593,6 @@ services:
 
   # resque:
   #   image: appwrite/resque-web:1.1.0
-  #   restart: unless-stopped
   #   networks:
   #     - appwrite
   #   ports:
@@ -568,7 +606,6 @@ services:
   # chronograf:
   #   image: chronograf:1.5
   #   container_name: appwrite-chronograf
-  #   restart: unless-stopped
   #   networks:
   #   - appwrite
   #   volumes:
