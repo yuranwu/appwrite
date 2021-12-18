@@ -30,13 +30,16 @@ class Server
     ];
 
     protected Adapter $adapter;
+    protected Resolver $resolver;
 
     /**
-     * 
+     * @param Adapter $adapter
+     * @param Resolver $resolver
      */
-    public function __construct(Adapter $adapter)
+    public function __construct(Adapter $adapter, Resolver $resolver)
     {
         $this->adapter = $adapter;
+        $this->resolver = $resolver;
     }
    
     public function start()
@@ -83,8 +86,7 @@ class Server
      */
     protected function resolve(string $domain, string $type): string
     {
-        Console::log('Domain: '.$domain.', Type: '.$type);
-        return '127.0.0.1';
+        return $this->resolver->resolve($domain, $type);
     }
    
     /**

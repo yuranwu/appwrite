@@ -1,6 +1,6 @@
 <?php
 
-namespace Appwrite\DNS\Server;
+namespace Appwrite\DNS\Adapter;
 
 use Appwrite\DNS\Adapter;
 use Swoole\Server;

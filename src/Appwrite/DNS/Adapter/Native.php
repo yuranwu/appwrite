@@ -1,6 +1,6 @@
 <?php
 
-namespace Appwrite\DNS\Server;
+namespace Appwrite\DNS\Adapter;
 
 use Socket;
 use Appwrite\DNS\Adapter;
