@@ -457,6 +457,16 @@ services:
     command: 'mysqld --innodb-flush-method=fsync' # add ' --query_cache_size=0' for DB tests
     # command: mv /var/lib/mysql/ib_logfile0 /var/lib/mysql/ib_logfile0.bu && mv /var/lib/mysql/ib_logfile1 /var/lib/mysql/ib_logfile1.bu
 
+  datadoghq:
+    container_name: dd-agent
+    volumes:
+        - '/var/run/docker.sock:/var/run/docker.sock:ro'
+        - '/proc/:/host/proc/:ro'
+        - '/sys/fs/cgroup/:/host/sys/fs/cgroup:ro'
+    environment:
+        - DD_API_KEY=<KEY>
+        - DD_SITE=<SITE>
+    image: 'gcr.io/datadoghq/agent:7'
   # smtp:
   #   image: appwrite/smtp:1.2.0
   #   container_name: appwrite-smtp

@@ -32,6 +32,7 @@ ENV DEBUG=$DEBUG
 ENV PHP_REDIS_VERSION=5.3.4 \
     PHP_MONGODB_VERSION=1.9.1 \
     PHP_SWOOLE_VERSION=v4.8.3 \
+    PHP_DATADOG_VERSION=0.67.0 \
     PHP_IMAGICK_VERSION=3.5.1 \
     PHP_YAML_VERSION=2.2.2 \
     PHP_MAXMINDDB_VERSION=v1.11.0
@@ -44,6 +45,7 @@ RUN \
   gcc \
   g++ \
   git \
+  curl-dev \
   zlib-dev \
   brotli-dev \
   openssl-dev \
@@ -90,6 +92,15 @@ FROM compile AS imagick
 RUN \
   git clone --depth 1 --branch $PHP_IMAGICK_VERSION https://github.com/imagick/imagick && \
   cd imagick && \
+  phpize && \
+  ./configure && \
+  make && make install
+
+## DataDog Extension
+FROM compile AS datadog
+RUN \
+  git clone --depth 1 --branch $PHP_DATADOG_VERSION https://github.com/DataDog/dd-trace-php && \
+  cd dd-trace-php && \
   phpize && \
   ./configure && \
   make && make install
@@ -181,7 +192,9 @@ ENV _APP_SERVER=swoole \
     _APP_MAINTENANCE_RETENTION_AUDIT=1209600 \
     # 1 Day = 86400 s
     _APP_MAINTENANCE_RETENTION_ABUSE=86400 \
-    _APP_MAINTENANCE_INTERVAL=86400
+    _APP_MAINTENANCE_INTERVAL=86400 \
+    DD_AGENT_HOST=datadoghq \
+    DD_TRACE_CLI_ENABLED=true
 
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
@@ -222,6 +235,7 @@ COPY --from=node /usr/local/src/public/dist /usr/src/code/public/dist
 COPY --from=swoole /usr/local/lib/php/extensions/no-debug-non-zts-20200930/swoole.so /usr/local/lib/php/extensions/no-debug-non-zts-20200930/yasd.so* /usr/local/lib/php/extensions/no-debug-non-zts-20200930/
 COPY --from=redis /usr/local/lib/php/extensions/no-debug-non-zts-20200930/redis.so /usr/local/lib/php/extensions/no-debug-non-zts-20200930/
 COPY --from=imagick /usr/local/lib/php/extensions/no-debug-non-zts-20200930/imagick.so /usr/local/lib/php/extensions/no-debug-non-zts-20200930/
+COPY --from=datadog /usr/local/lib/php/extensions/no-debug-non-zts-20200930/ddtrace.so /usr/local/lib/php/extensions/no-debug-non-zts-20200930/
 COPY --from=yaml /usr/local/lib/php/extensions/no-debug-non-zts-20200930/yaml.so /usr/local/lib/php/extensions/no-debug-non-zts-20200930/
 COPY --from=maxmind /usr/local/lib/php/extensions/no-debug-non-zts-20200930/maxminddb.so /usr/local/lib/php/extensions/no-debug-non-zts-20200930/
 COPY --from=mongodb /usr/local/lib/php/extensions/no-debug-non-zts-20200930/mongodb.so /usr/local/lib/php/extensions/no-debug-non-zts-20200930/
