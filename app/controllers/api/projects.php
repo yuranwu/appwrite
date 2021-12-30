@@ -320,6 +320,28 @@ App::get('/v1/projects/:projectId/usage')
                 }
             });
 
+
+            // for each metric, put a random value with increasing trend
+            foreach ($stats['requests'] as $key => $stat) {
+                $stats['requests'][$key]['value'] = 20000 + $key*2000 + rand(-10000, 10000);
+            }
+
+            foreach ($stats['database.documents.count'] as $key => $stat) {
+                $stats['database.documents.count'][$key]['value'] = 10000 + $key*4000 + rand(-200, 300);
+            }
+
+            foreach ($stats['executions'] as $key => $stat) {
+                $stats['executions'][$key]['value'] = 5000 + $key*1000 + rand(-200, 300);
+            }
+
+            foreach ($stats['users.count'] as $key => $stat) {
+                $stats['users.count'][$key]['value'] = 1000 + $key*2000 + rand(-200, 300);
+            }
+
+            foreach ($stats['storage.total'] as $key => $stat) {
+                $stats['storage.total'][$key]['value'] = 1000000000 + $key*1000000000 + rand(-10000, 10000);
+            }
+
             $usage = new Document([
                 'range' => $range,
                 'requests' => $stats['requests'],

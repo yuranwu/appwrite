@@ -360,6 +360,11 @@ App::get('/v1/database/usage')
                     }
                     // TODO@kodumbeats explore performance if query is ordered by time ASC
                     $stats[$metric] = array_reverse($stats[$metric]);
+                    
+                    // for each metric, put a random value with increasing trend
+                    foreach ($stats[$metric] as $key => $stat) {
+                        $stats[$metric][$key]['value'] = $key + rand(0, 5);
+                    }
                 }
             });
 
@@ -472,6 +477,10 @@ App::get('/v1/database/:collectionId/usage')
                         $backfill--;
                     }
                     $stats[$metric] = array_reverse($stats[$metric]);
+                    // for each metric, put a random value with increasing trend
+                    foreach ($stats[$metric] as $key => $stat) {
+                        $stats[$metric][$key]['value'] = 100 + $key*50 + rand(-10, 300);
+                    }
                 }    
             });
 

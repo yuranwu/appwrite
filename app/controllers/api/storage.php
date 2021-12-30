@@ -771,6 +771,10 @@ App::get('/v1/storage/usage')
                         $backfill--;
                     }
                     $stats[$metric] = array_reverse($stats[$metric]);
+                    // for each metric, put a random value with increasing trend
+                    foreach ($stats[$metric] as $key => $stat) {
+                        $stats[$metric][$key]['value'] = 100 + $key*50 + rand(-10, 300);
+                    }
                 }
             });
 
