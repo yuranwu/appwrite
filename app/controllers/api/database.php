@@ -363,7 +363,7 @@ App::get('/v1/database/usage')
                     
                     // for each metric, put a random value with increasing trend
                     foreach ($stats[$metric] as $key => $stat) {
-                        $stats[$metric][$key]['value'] = $key + rand(0, 5);
+                        $stats[$metric][$key]['value'] = 100 + $key*50 + rand(-10, 300);
                     }
                 }
             });

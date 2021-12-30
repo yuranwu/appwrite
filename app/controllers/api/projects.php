@@ -319,7 +319,7 @@ App::get('/v1/projects/:projectId/usage')
 
             // for each metric, put a random value with increasing trend
             foreach ($stats['requests'] as $key => $stat) {
-                $stats['requests'][$key]['value'] = 20000 + $key*2000 + rand(-10000, 10000);
+                $stats['requests'][$key]['value'] = 10000 + $key*2000 + rand(-10000, 10000);
             }
 
             foreach ($stats['database.documents.count'] as $key => $stat) {
