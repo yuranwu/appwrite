@@ -33,6 +33,8 @@ use Appwrite\Network\Validator\IP;
 use Appwrite\Network\Validator\URL;
 use Appwrite\Utopia\Response;
 use Appwrite\Detector\Detector;
+use Appwrite\Event\Event;
+use Appwrite\Stats\Stats;
 
 /**
  * Create attribute of varying type
@@ -40,15 +42,14 @@ use Appwrite\Detector\Detector;
  * @param string $collectionId
  * @param Utopia\Database\Document $attribute
  * @param Appwrite\Utopia\Response $response
- * @param Utopia\Database\Database $dbForInternal
- * @param Utopia\Database\Database $dbForExternal
+ * @param Utopia\Database\Database $dbForProject
  * @param Appwrite\Event\Event $database
  * @param Appwrite\Event\Event $audits
  * @param Appwrite\Stats\Stats $usage
  *
  * @return Document Newly created attribute document
  */
-function createAttribute($collectionId, $attribute, $response, $dbForInternal, $dbForExternal, $database, $audits, $usage): Document
+function createAttribute(string $collectionId, Document $attribute, Response $response, Database $dbForProject, Event $database, Event $audits, Stats $usage): Document
 {
     $key = $attribute->getAttribute('key');
     $type = $attribute->getAttribute('type', '');
@@ -61,7 +62,7 @@ function createAttribute($collectionId, $attribute, $response, $dbForInternal, $
     $filters = $attribute->getAttribute('filters', []); // filters are hidden from the endpoint 
     $default = $attribute->getAttribute('default');
 
-    $collection = $dbForInternal->getDocument('collections', $collectionId);
+    $collection = $dbForProject->getDocument('collections', $collectionId);
 
     if ($collection->isEmpty()) {
         throw new Exception('Collection not found', 404);
@@ -73,7 +74,7 @@ function createAttribute($collectionId, $attribute, $response, $dbForInternal, $
         }
     }
 
-    // Must throw here since dbForExternal->createAttribute is performed by db worker
+    // Must throw here since dbForProject->createAttribute is performed by db worker
     if ($required && $default) {
         throw new Exception('Cannot set default value for required attribute', 400);
     }
@@ -99,8 +100,8 @@ function createAttribute($collectionId, $attribute, $response, $dbForInternal, $
             'filters' => $filters,
         ]);
 
-        $dbForInternal->checkAttribute($collection, $attribute);
-        $attribute = $dbForInternal->createDocument('attributes', $attribute);
+        $dbForProject->checkAttribute($collection, $attribute);
+        $attribute = $dbForProject->createDocument('attributes', $attribute);
     }
     catch (DuplicateException $exception) {
         throw new Exception('Attribute already exists', 409);
@@ -109,8 +110,8 @@ function createAttribute($collectionId, $attribute, $response, $dbForInternal, $
         throw new Exception('Attribute limit exceeded', 400);
     }
 
-    $dbForInternal->deleteCachedDocument('collections', $collectionId);
-    $dbForExternal->deleteCachedCollection($collectionId);
+    $dbForProject->deleteCachedDocument('collections', $collectionId);
+    $dbForProject->deleteCachedCollection($collectionId);
 
     // Pass clone of $attribute object to workers
     // so we can later modify Document to fit response model
@@ -126,7 +127,7 @@ function createAttribute($collectionId, $attribute, $response, $dbForInternal, $
 
     $audits
         ->setParam('event', 'database.attributes.create')
-        ->setParam('resource', 'collection/'.$collection->getId())
+        ->setParam('resource', 'collection/'.$collectionId)
         ->setParam('data', $clone)
     ;
 
@@ -153,22 +154,21 @@ App::post('/v1/database/collections')
     ->param('read', null, new Permissions(), 'An array of strings with read permissions. By default no user is granted with any read permissions. [learn more about permissions](https://appwrite.io/docs/permissions) and get a full list of available permissions.')
     ->param('write', null, new Permissions(), 'An array of strings with write permissions. By default no user is granted with any write permissions. [learn more about permissions](https://appwrite.io/docs/permissions) and get a full list of available permissions.')
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $name, $permission, $read, $write, $response, $dbForInternal, $dbForExternal, $audits, $usage) {
+    ->action(function ($collectionId, $name, $permission, $read, $write, $response, $dbForProject, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForExternal*/
+        /** @var Utopia\Database\Database $dbForProject*/
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
 
-        $collectionId = $collectionId == 'unique()' ? $dbForExternal->getId() : $collectionId;
+        $collectionId = $collectionId == 'unique()' ? $dbForProject->getId() : $collectionId;
 
         try {
-            $dbForExternal->createCollection($collectionId);
+            $dbForProject->createCollection('collection_' . $collectionId);
 
-            $collection = $dbForInternal->createDocument('collections', new Document([
+            $collection = $dbForProject->createDocument('collections', new Document([
                 '$id' => $collectionId,
                 '$read' => $read ?? [], // Collection permissions for collection documents (based on permission model)
                 '$write' => $write ?? [], // Collection permissions for collection documents (based on permission model)
@@ -185,7 +185,7 @@ App::post('/v1/database/collections')
 
         $audits
             ->setParam('event', 'database.collections.create')
-            ->setParam('resource', 'collection/'.$collection->getId())
+            ->setParam('resource', 'collection/'.$collectionId)
             ->setParam('data', $collection->getArrayCopy())
         ;
 
@@ -213,14 +213,14 @@ App::get('/v1/database/collections')
     ->param('cursorDirection', Database::CURSOR_AFTER, new WhiteList([Database::CURSOR_AFTER, Database::CURSOR_BEFORE]), 'Direction of the cursor.', true)
     ->param('orderType', 'ASC', new WhiteList(['ASC', 'DESC'], true), 'Order result by ASC or DESC order.', true)
     ->inject('response')
-    ->inject('dbForInternal')
+    ->inject('dbForProject')
     ->inject('usage')
-    ->action(function ($search, $limit, $offset, $cursor, $cursorDirection, $orderType, $response, $dbForInternal, $usage) {
+    ->action(function ($search, $limit, $offset, $cursor, $cursorDirection, $orderType, $response, $dbForProject, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
+        /** @var Utopia\Database\Database $dbForProject */
 
         if (!empty($cursor)) {
-            $cursorCollection = $dbForInternal->getDocument('collections', $cursor);
+            $cursorCollection = $dbForProject->getDocument('collections', $cursor);
 
             if ($cursorCollection->isEmpty()) {
                 throw new Exception("Collection '{$cursor}' for the 'cursor' value not found.", 400);
@@ -236,8 +236,8 @@ App::get('/v1/database/collections')
         $usage->setParam('database.collections.read', 1);
 
         $response->dynamic(new Document([
-            'collections' => $dbForInternal->find('collections', $queries, $limit, $offset, [], [$orderType], $cursorCollection ?? null, $cursorDirection),
-            'sum' => $dbForInternal->count('collections', $queries, APP_LIMIT_COUNT),
+            'collections' => $dbForProject->find('collections', $queries, $limit, $offset, [], [$orderType], $cursorCollection ?? null, $cursorDirection),
+            'sum' => $dbForProject->count('collections', $queries, APP_LIMIT_COUNT),
         ]), Response::MODEL_COLLECTION_LIST);
     });
 
@@ -254,13 +254,13 @@ App::get('/v1/database/collections/:collectionId')
     ->label('sdk.response.model', Response::MODEL_COLLECTION)
     ->param('collectionId', '', new UID(), 'Collection ID.')
     ->inject('response')
-    ->inject('dbForInternal')
+    ->inject('dbForProject')
     ->inject('usage')
-    ->action(function ($collectionId, $response, $dbForInternal, $usage) {
+    ->action(function ($collectionId, $response, $dbForProject, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
+        /** @var Utopia\Database\Database $dbForProject */
 
-        $collection = $dbForInternal->getDocument('collections', $collectionId);
+        $collection = $dbForProject->getDocument('collections', $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
@@ -283,11 +283,11 @@ App::get('/v1/database/usage')
     ->label('sdk.response.model', Response::MODEL_USAGE_DATABASE)
     ->param('range', '30d', new WhiteList(['24h', '7d', '30d', '90d'], true), 'Date range.', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->action(function ($range, $response, $dbForInternal) {
+    ->inject('dbForProject')
+    ->action(function ($range, $response, $dbForProject) {
         /** @var Appwrite\Utopia\Response $response */
         /** @var Utopia\Database\Database $dbForConsole */
-        /** @var Utopia\Database\Database $dbForInternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Utopia\Registry\Registry $register */
 
         $usage = [];
@@ -326,12 +326,12 @@ App::get('/v1/database/usage')
 
             $stats = [];
 
-            Authorization::skip(function() use ($dbForInternal, $periods, $range, $metrics, &$stats) {
+            Authorization::skip(function() use ($dbForProject, $periods, $range, $metrics, &$stats) {
                 foreach ($metrics as $metric) {
                     $limit = $periods[$range]['limit'];
                     $period = $periods[$range]['period'];
 
-                    $requestDocs = $dbForInternal->find('stats', [
+                    $requestDocs = $dbForProject->find('stats', [
                         new Query('period', Query::TYPE_EQUAL, [$period]),
                         new Query('metric', Query::TYPE_EQUAL, [$metric]),
                     ], $limit, 0, ['time'], [Database::ORDER_DESC]);
@@ -399,20 +399,18 @@ App::get('/v1/database/:collectionId/usage')
     ->param('range', '30d', new WhiteList(['24h', '7d', '30d', '90d'], true), 'Date range.', true)
     ->param('collectionId', '', new UID(), 'Collection ID.')
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
-    ->action(function ($range, $collectionId, $response, $dbForInternal, $dbForExternal) {
+    ->inject('dbForProject')
+    ->action(function ($range, $collectionId, $response, $dbForProject) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForConsole */
-        /** @var Utopia\Database\Database $dbForInternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Utopia\Registry\Registry $register */
 
-        $collection = $dbForExternal->getCollection($collectionId);
+        $collection = $dbForProject->getCollection('collection_' . $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
         }
-        
+
         $usage = [];
         if(App::getEnv('_APP_USAGE_STATS', 'enabled') == 'enabled') {
             $periods = [
@@ -444,12 +442,12 @@ App::get('/v1/database/:collectionId/usage')
 
             $stats = [];
 
-            Authorization::skip(function() use ($dbForInternal, $periods, $range, $metrics, &$stats) {
+            Authorization::skip(function() use ($dbForProject, $periods, $range, $metrics, &$stats) {
                 foreach ($metrics as $metric) {
                     $limit = $periods[$range]['limit'];
                     $period = $periods[$range]['period'];
 
-                    $requestDocs = $dbForInternal->find('stats', [
+                    $requestDocs = $dbForProject->find('stats', [
                         new Query('period', Query::TYPE_EQUAL, [$period]),
                         new Query('metric', Query::TYPE_EQUAL, [$metric]),
                     ], $limit, 0, ['time'], [Database::ORDER_DESC]);
@@ -512,26 +510,24 @@ App::get('/v1/database/collections/:collectionId/logs')
     ->param('limit', 25, new Range(0, 100), 'Maximum number of logs to return in response. By default will return maximum 25 results. Maximum of 100 results allowed per request.', true)
     ->param('offset', 0, new Range(0, APP_LIMIT_COUNT), 'Offset value. The default value is 0. Use this value to manage pagination. [learn more about pagination](https://appwrite.io/docs/pagination)', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('locale')
     ->inject('geodb')
-    ->action(function ($collectionId, $limit, $offset, $response, $dbForInternal, $dbForExternal, $locale, $geodb) {
+    ->action(function ($collectionId, $limit, $offset, $response, $dbForProject, $locale, $geodb) {
         /** @var Appwrite\Utopia\Response $response */
         /** @var Utopia\Database\Document $project */
-        /** @var Utopia\Database\Database $dbForInternal */
-        /** @var Utopia\Database\Database $dbForExternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Utopia\Locale\Locale $locale */
         /** @var MaxMind\Db\Reader $geodb */
 
-        $collection = $dbForExternal->getCollection($collectionId);
+        $collection = $dbForProject->getCollection('collection_' . $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
         }
 
-        $audit = new Audit($dbForInternal);
-        $resource = 'collection/'.$collection->getId();
+        $audit = new Audit($dbForProject);
+        $resource = 'collection/'.$collectionId;
         $logs = $audit->getLogsByResource($resource, $limit, $offset);
 
         $output = [];
@@ -604,16 +600,16 @@ App::put('/v1/database/collections/:collectionId')
     ->param('write', null, new Permissions(), 'An array of strings with write permissions. By default inherits the existing write permissions. [learn more about permissions](https://appwrite.io/docs/permissions) and get a full list of available permissions.', true)
     ->param('enabled', true, new Boolean(), 'Is collection enabled?', true)
     ->inject('response')
-    ->inject('dbForInternal')
+    ->inject('dbForProject')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $name, $permission, $read, $write, $enabled, $response, $dbForInternal, $audits, $usage) {
+    ->action(function ($collectionId, $name, $permission, $read, $write, $enabled, $response, $dbForProject, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
 
-        $collection = $dbForInternal->getDocument('collections', $collectionId);
+        $collection = $dbForProject->getDocument('collections', $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
@@ -624,7 +620,7 @@ App::put('/v1/database/collections/:collectionId')
         $enabled ??= $collection->getAttribute('enabled', true);
 
         try {
-            $collection = $dbForInternal->updateDocument('collections', $collection->getId(), $collection
+            $collection = $dbForProject->updateDocument('collections', $collectionId, $collection
                 ->setAttribute('$write', $write)
                 ->setAttribute('$read', $read)
                 ->setAttribute('name', $name)
@@ -645,7 +641,7 @@ App::put('/v1/database/collections/:collectionId')
 
         $audits
             ->setParam('event', 'database.collections.update')
-            ->setParam('resource', 'collection/'.$collection->getId())
+            ->setParam('resource', 'collection/'.$collectionId)
             ->setParam('data', $collection->getArrayCopy())
         ;
 
@@ -665,31 +661,29 @@ App::delete('/v1/database/collections/:collectionId')
     ->label('sdk.response.model', Response::MODEL_NONE)
     ->param('collectionId', '', new UID(), 'Collection ID.')
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('events')
     ->inject('audits')
     ->inject('deletes')
     ->inject('usage')
-    ->action(function ($collectionId, $response, $dbForInternal, $dbForExternal, $events, $audits, $deletes, $usage) {
+    ->action(function ($collectionId, $response, $dbForProject, $events, $audits, $deletes, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
-        /** @var Utopia\Database\Database $dbForExternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Appwrite\Event\Event $events */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $audits */
 
-        $collection = $dbForInternal->getDocument('collections', $collectionId);
+        $collection = $dbForProject->getDocument('collections', $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
         }
 
-        if (!$dbForInternal->deleteDocument('collections', $collectionId)) {
+        if (!$dbForProject->deleteDocument('collections', $collectionId)) {
             throw new Exception('Failed to remove collection from DB', 500);
         }
 
-        $dbForExternal->deleteCachedCollection($collection->getId());
+        $dbForProject->deleteCachedCollection('collection_' . $collectionId);
 
         $deletes
             ->setParam('type', DELETE_TYPE_DOCUMENT)
@@ -704,7 +698,7 @@ App::delete('/v1/database/collections/:collectionId')
 
         $audits
             ->setParam('event', 'database.collections.delete')
-            ->setParam('resource', 'collection/'.$collection->getId())
+            ->setParam('resource', 'collection/'.$collectionId)
             ->setParam('data', $collection->getArrayCopy())
         ;
 
@@ -730,15 +724,13 @@ App::post('/v1/database/collections/:collectionId/attributes/string')
     ->param('default', null, new Text(0), 'Default value for attribute when not provided. Cannot be set when attribute is required.', true)
     ->param('array', false, new Boolean(), 'Is attribute an array?', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('database')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $size, $required, $default, $array, $response, $dbForInternal, $dbForExternal, $database, $audits, $usage) {
+    ->action(function ($collectionId, $key, $size, $required, $default, $array, $response, $dbForProject, $database, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal*/
-        /** @var Utopia\Database\Database $dbForExternal*/
+        /** @var Utopia\Database\Database $dbForProject*/
         /** @var Appwrite\Event\Event $database */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
@@ -756,7 +748,7 @@ App::post('/v1/database/collections/:collectionId/attributes/string')
             'required' => $required,
             'default' => $default,
             'array' => $array,
-        ]), $response, $dbForInternal, $dbForExternal, $database, $audits, $usage);
+        ]), $response, $dbForProject, $database, $audits, $usage);
 
         $response->dynamic($attribute, Response::MODEL_ATTRIBUTE_STRING);
     });
@@ -779,15 +771,13 @@ App::post('/v1/database/collections/:collectionId/attributes/email')
     ->param('default', null, new Email(), 'Default value for attribute when not provided. Cannot be set when attribute is required.', true)
     ->param('array', false, new Boolean(), 'Is attribute an array?', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('database')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $required, $default, $array, $response, $dbForInternal, $dbForExternal, $database, $audits, $usage) {
+    ->action(function ($collectionId, $key, $required, $default, $array, $response, $dbForProject, $database, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal*/
-        /** @var Utopia\Database\Database $dbForExternal*/
+        /** @var Utopia\Database\Database $dbForProject*/
         /** @var Appwrite\Event\Event $database */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
@@ -800,7 +790,7 @@ App::post('/v1/database/collections/:collectionId/attributes/email')
             'default' => $default,
             'array' => $array,
             'format' => APP_DATABASE_ATTRIBUTE_EMAIL,
-        ]), $response, $dbForInternal, $dbForExternal, $database, $audits, $usage);
+        ]), $response, $dbForProject, $database, $audits, $usage);
 
         $response->dynamic($attribute, Response::MODEL_ATTRIBUTE_EMAIL);
     });
@@ -824,15 +814,13 @@ App::post('/v1/database/collections/:collectionId/attributes/enum')
     ->param('default', null, new Text(0), 'Default value for attribute when not provided. Cannot be set when attribute is required.', true)
     ->param('array', false, new Boolean(), 'Is attribute an array?', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('database')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $elements, $required, $default, $array, $response, $dbForInternal, $dbForExternal, $database, $audits, $usage) {
+    ->action(function ($collectionId, $key, $elements, $required, $default, $array, $response, $dbForProject, $database, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal*/
-        /** @var Utopia\Database\Database $dbForExternal*/
+        /** @var Utopia\Database\Database $dbForProject*/
         /** @var Appwrite\Event\Event $database */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
@@ -861,7 +849,7 @@ App::post('/v1/database/collections/:collectionId/attributes/enum')
             'array' => $array,
             'format' => APP_DATABASE_ATTRIBUTE_ENUM,
             'formatOptions' => ['elements' => $elements],
-        ]), $response, $dbForInternal, $dbForExternal, $database, $audits, $usage);
+        ]), $response, $dbForProject, $database, $audits, $usage);
 
         $response->dynamic($attribute, Response::MODEL_ATTRIBUTE_ENUM);
     });
@@ -884,15 +872,13 @@ App::post('/v1/database/collections/:collectionId/attributes/ip')
     ->param('default', null, new IP(), 'Default value for attribute when not provided. Cannot be set when attribute is required.', true)
     ->param('array', false, new Boolean(), 'Is attribute an array?', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('database')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $required, $default, $array, $response, $dbForInternal, $dbForExternal, $database, $audits, $usage) {
+    ->action(function ($collectionId, $key, $required, $default, $array, $response, $dbForProject, $database, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal*/
-        /** @var Utopia\Database\Database $dbForExternal*/
+        /** @var Utopia\Database\Database $dbForProject*/
         /** @var Appwrite\Event\Event $database */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
@@ -905,7 +891,7 @@ App::post('/v1/database/collections/:collectionId/attributes/ip')
             'default' => $default,
             'array' => $array,
             'format' => APP_DATABASE_ATTRIBUTE_IP,
-        ]), $response, $dbForInternal, $dbForExternal, $database, $audits, $usage);
+        ]), $response, $dbForProject, $database, $audits, $usage);
 
         $response->dynamic($attribute, Response::MODEL_ATTRIBUTE_IP);
     });
@@ -928,14 +914,12 @@ App::post('/v1/database/collections/:collectionId/attributes/url')
     ->param('default', null, new URL(), 'Default value for attribute when not provided. Cannot be set when attribute is required.', true)
     ->param('array', false, new Boolean(), 'Is attribute an array?', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('database')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $required, $default, $array, $response, $dbForInternal, $dbForExternal, $database, $audits, $usage) {
+    ->action(function ($collectionId, $key, $required, $default, $array, $response, $dbForProject, $database, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForExternal*/
         /** @var Appwrite\Event\Event $database */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
@@ -948,7 +932,7 @@ App::post('/v1/database/collections/:collectionId/attributes/url')
             'default' => $default,
             'array' => $array,
             'format' => APP_DATABASE_ATTRIBUTE_URL,
-        ]), $response, $dbForInternal, $dbForExternal, $database, $audits, $usage);
+        ]), $response, $dbForProject, $database, $audits, $usage);
 
         $response->dynamic($attribute, Response::MODEL_ATTRIBUTE_URL);
     });
@@ -973,15 +957,13 @@ App::post('/v1/database/collections/:collectionId/attributes/integer')
     ->param('default', null, new Integer(), 'Default value for attribute when not provided. Cannot be set when attribute is required.', true)
     ->param('array', false, new Boolean(), 'Is attribute an array?', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('database')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $required, $min, $max, $default, $array, $response, $dbForInternal, $dbForExternal, $database, $audits, $usage) {
+    ->action(function ($collectionId, $key, $required, $min, $max, $default, $array, $response, $dbForProject, $database, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal*/
-        /** @var Utopia\Database\Database $dbForExternal*/
+        /** @var Utopia\Database\Database $dbForProject*/
         /** @var Appwrite\Event\Event $database */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
@@ -1000,10 +982,12 @@ App::post('/v1/database/collections/:collectionId/attributes/integer')
             throw new Exception($validator->getDescription(), 400);
         }
 
+        $size = $max > 2147483647 ? 8 : 4; // Automatically create BigInt depending on max value
+
         $attribute = createAttribute($collectionId, new Document([
             'key' => $key,
             'type' => Database::VAR_INTEGER,
-            'size' => 0,
+            'size' => $size,
             'required' => $required,
             'default' => $default,
             'array' => $array,
@@ -1012,7 +996,7 @@ App::post('/v1/database/collections/:collectionId/attributes/integer')
                 'min' => $min,
                 'max' => $max,
             ],
-        ]), $response, $dbForInternal, $dbForExternal, $database, $audits, $usage);
+        ]), $response, $dbForProject, $database, $audits, $usage);
 
         $formatOptions = $attribute->getAttribute('formatOptions', []);
 
@@ -1044,15 +1028,13 @@ App::post('/v1/database/collections/:collectionId/attributes/float')
     ->param('default', null, new FloatValidator(), 'Default value for attribute when not provided. Cannot be set when attribute is required.', true)
     ->param('array', false, new Boolean(), 'Is attribute an array?', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('database')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $required, $min, $max, $default, $array, $response, $dbForInternal, $dbForExternal, $database, $audits, $usage) {
+    ->action(function ($collectionId, $key, $required, $min, $max, $default, $array, $response, $dbForProject, $database, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal*/
-        /** @var Utopia\Database\Database $dbForExternal*/
+        /** @var Utopia\Database\Database $dbForProject*/
         /** @var Appwrite\Event\Event $database */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
@@ -1088,7 +1070,7 @@ App::post('/v1/database/collections/:collectionId/attributes/float')
                 'min' => $min,
                 'max' => $max,
             ],
-        ]), $response, $dbForInternal, $dbForExternal, $database, $audits, $usage);
+        ]), $response, $dbForProject, $database, $audits, $usage);
 
         $formatOptions = $attribute->getAttribute('formatOptions', []);
 
@@ -1118,14 +1100,13 @@ App::post('/v1/database/collections/:collectionId/attributes/boolean')
     ->param('default', null, new Boolean(), 'Default value for attribute when not provided. Cannot be set when attribute is required.', true)
     ->param('array', false, new Boolean(), 'Is attribute an array?', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('database')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $required, $default, $array, $response, $dbForInternal, $dbForExternal, $database, $audits, $usage) {
+    ->action(function ($collectionId, $key, $required, $default, $array, $response, $dbForProject, $database, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal*/
+        /** @var Utopia\Database\Database $dbForProject*/
         /** @var Appwrite\Event\Event $database */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
@@ -1137,7 +1118,7 @@ App::post('/v1/database/collections/:collectionId/attributes/boolean')
             'required' => $required,
             'default' => $default,
             'array' => $array,
-        ]), $response, $dbForInternal, $dbForExternal, $database, $audits, $usage);
+        ]), $response, $dbForProject, $database, $audits, $usage);
 
         $response->dynamic($attribute, Response::MODEL_ATTRIBUTE_BOOLEAN);
     });
@@ -1155,13 +1136,13 @@ App::get('/v1/database/collections/:collectionId/attributes')
     ->label('sdk.response.model', Response::MODEL_ATTRIBUTE_LIST)
     ->param('collectionId', '', new UID(), 'Collection ID. You can create a new collection using the Database service [server integration](https://appwrite.io/docs/server/database#createCollection).')
     ->inject('response')
-    ->inject('dbForInternal')
+    ->inject('dbForProject')
     ->inject('usage')
-    ->action(function ($collectionId, $response, $dbForInternal, $usage) {
+    ->action(function ($collectionId, $response, $dbForProject, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
+        /** @var Utopia\Database\Database $dbForProject */
 
-        $collection = $dbForInternal->getDocument('collections', $collectionId);
+        $collection = $dbForProject->getDocument('collections', $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
@@ -1199,21 +1180,21 @@ App::get('/v1/database/collections/:collectionId/attributes/:key')
     ->param('collectionId', '', new UID(), 'Collection ID. You can create a new collection using the Database service [server integration](https://appwrite.io/docs/server/database#createCollection).')
     ->param('key', '', new Key(), 'Attribute Key.')
     ->inject('response')
-    ->inject('dbForInternal')
+    ->inject('dbForProject')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $response, $dbForInternal, $usage) {
+    ->action(function ($collectionId, $key, $response, $dbForProject, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
+        /** @var Utopia\Database\Database $dbForProject */
 
-        $collection = $dbForInternal->getDocument('collections', $collectionId);
+        $collection = $dbForProject->getDocument('collections', $collectionId);
 
-        if (empty($collection)) {
+        if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
         }
 
-        $attribute = $collection->find('$id', $key, 'attributes');
+        $attribute = $dbForProject->getDocument('attributes', $collectionId.'_'.$key);
 
-        if (!$attribute) {
+        if ($attribute->isEmpty()) {
             throw new Exception('Attribute not found', 404);
         }
 
@@ -1254,40 +1235,38 @@ App::delete('/v1/database/collections/:collectionId/attributes/:key')
     ->param('collectionId', '', new UID(), 'Collection ID. You can create a new collection using the Database service [server integration](https://appwrite.io/docs/server/database#createCollection).')
     ->param('key', '', new Key(), 'Attribute Key.')
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('database')
     ->inject('events')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $response, $dbForInternal, $dbForExternal, $database, $events, $audits, $usage) {
+    ->action(function ($collectionId, $key, $response, $dbForProject, $database, $events, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
-        /** @var Utopia\Database\Database $dbForExternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Appwrite\Event\Event $database */
         /** @var Appwrite\Event\Event $events */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
 
-        $collection = $dbForInternal->getDocument('collections', $collectionId);
+        $collection = $dbForProject->getDocument('collections', $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
         }
 
-        $attribute = $dbForInternal->getDocument('attributes', $collectionId.'_'.$key);
+        $attribute = $dbForProject->getDocument('attributes', $collectionId.'_'.$key);
 
-        if (empty($attribute->getId())) {
+        if ($attribute->isEmpty()) {
             throw new Exception('Attribute not found', 404);
         }
 
         // Only update status if removing available attribute
         if ($attribute->getAttribute('status' === 'available')) {
-            $attribute = $dbForInternal->updateDocument('attributes', $attribute->getId(), $attribute->setAttribute('status', 'deleting'));
+            $attribute = $dbForProject->updateDocument('attributes', $attribute->getId(), $attribute->setAttribute('status', 'deleting'));
         }
 
-        $dbForInternal->deleteCachedDocument('collections', $collectionId);
-        $dbForExternal->deleteCachedCollection($collection->getId());
+        $dbForProject->deleteCachedDocument('collections', $collectionId);
+        $dbForProject->deleteCachedCollection($collectionId);
 
         $database
             ->setParam('type', DATABASE_TYPE_DELETE_ATTRIBUTE)
@@ -1321,7 +1300,7 @@ App::delete('/v1/database/collections/:collectionId/attributes/:key')
 
         $audits
             ->setParam('event', 'database.attributes.delete')
-            ->setParam('resource', 'collection/'.$collection->getId())
+            ->setParam('resource', 'collection/'.$collectionId)
             ->setParam('data', $attribute->getArrayCopy())
         ;
 
@@ -1346,24 +1325,24 @@ App::post('/v1/database/collections/:collectionId/indexes')
     ->param('attributes', null, new ArrayList(new Key()), 'Array of attributes to index.')
     ->param('orders', [], new ArrayList(new WhiteList(['ASC', 'DESC'], false, Database::VAR_STRING)), 'Array of index orders.', true)
     ->inject('response')
-    ->inject('dbForInternal')
+    ->inject('dbForProject')
     ->inject('database')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $type, $attributes, $orders, $response, $dbForInternal, $database, $audits, $usage) {
+    ->action(function ($collectionId, $key, $type, $attributes, $orders, $response, $dbForProject, $database, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Appwrite\Event\Event $database */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $audits */
 
-        $collection = $dbForInternal->getDocument('collections', $collectionId);
+        $collection = $dbForProject->getDocument('collections', $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
         }
 
-        $count = $dbForInternal->count('indexes', [
+        $count = $dbForProject->count('indexes', [
             new Query('collectionId', Query::TYPE_EQUAL, [$collectionId])
         ], 61);
 
@@ -1374,9 +1353,7 @@ App::post('/v1/database/collections/:collectionId/indexes')
         }
 
         // Convert Document[] to array of attribute metadata
-        $oldAttributes = \array_map(function ($a) {
-            return $a->getArrayCopy();
-        }, $collection->getAttribute('attributes'));
+        $oldAttributes = \array_map(fn ($a) => $a->getArrayCopy(), $collection->getAttribute('attributes'));
 
         // lengths hidden by default
         $lengths = [];
@@ -1403,7 +1380,7 @@ App::post('/v1/database/collections/:collectionId/indexes')
         }
 
         try {
-            $index = $dbForInternal->createDocument('indexes', new Document([
+            $index = $dbForProject->createDocument('indexes', new Document([
                 '$id' => $collectionId.'_'.$key,
                 'key' => $key,
                 'status' => 'processing', // processing, available, failed, deleting, stuck
@@ -1417,7 +1394,7 @@ App::post('/v1/database/collections/:collectionId/indexes')
             throw new Exception('Index already exists', 409);
         }
 
-        $dbForInternal->deleteCachedDocument('collections', $collectionId);
+        $dbForProject->deleteCachedDocument('collections', $collectionId);
 
         $database
             ->setParam('type', DATABASE_TYPE_CREATE_INDEX)
@@ -1429,7 +1406,7 @@ App::post('/v1/database/collections/:collectionId/indexes')
 
         $audits
             ->setParam('event', 'database.indexes.create')
-            ->setParam('resource', 'collection/'.$collection->getId())
+            ->setParam('resource', 'collection/'.$collectionId)
             ->setParam('data', $index->getArrayCopy())
         ;
 
@@ -1450,13 +1427,13 @@ App::get('/v1/database/collections/:collectionId/indexes')
     ->label('sdk.response.model', Response::MODEL_INDEX_LIST)
     ->param('collectionId', '', new UID(), 'Collection ID. You can create a new collection using the Database service [server integration](https://appwrite.io/docs/server/database#createCollection).')
     ->inject('response')
-    ->inject('dbForInternal')
+    ->inject('dbForProject')
     ->inject('usage')
-    ->action(function ($collectionId, $response, $dbForInternal, $usage) {
+    ->action(function ($collectionId, $response, $dbForProject, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
+        /** @var Utopia\Database\Database $dbForProject */
 
-        $collection = $dbForInternal->getDocument('collections', $collectionId);
+        $collection = $dbForProject->getDocument('collections', $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
@@ -1486,13 +1463,13 @@ App::get('/v1/database/collections/:collectionId/indexes/:key')
     ->param('collectionId', '', new UID(), 'Collection ID. You can create a new collection using the Database service [server integration](https://appwrite.io/docs/server/database#createCollection).')
     ->param('key', null, new Key(), 'Index Key.')
     ->inject('response')
-    ->inject('dbForInternal')
+    ->inject('dbForProject')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $response, $dbForInternal, $usage) {
+    ->action(function ($collectionId, $key, $response, $dbForProject, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
+        /** @var Utopia\Database\Database $dbForProject */
 
-        $collection = $dbForInternal->getDocument('collections', $collectionId);
+        $collection = $dbForProject->getDocument('collections', $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
@@ -1530,26 +1507,26 @@ App::delete('/v1/database/collections/:collectionId/indexes/:key')
     ->param('collectionId', null, new UID(), 'Collection ID. You can create a new collection using the Database service [server integration](https://appwrite.io/docs/server/database#createCollection).')
     ->param('key', '', new Key(), 'Index Key.')
     ->inject('response')
-    ->inject('dbForInternal')
+    ->inject('dbForProject')
     ->inject('database')
     ->inject('events')
     ->inject('audits')
     ->inject('usage')
-    ->action(function ($collectionId, $key, $response, $dbForInternal, $database, $events, $audits, $usage) {
+    ->action(function ($collectionId, $key, $response, $dbForProject, $database, $events, $audits, $usage) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Appwrite\Event\Event $database */
         /** @var Appwrite\Event\Event $events */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
 
-        $collection = $dbForInternal->getDocument('collections', $collectionId);
+        $collection = $dbForProject->getDocument('collections', $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
         }
 
-        $index = $dbForInternal->getDocument('indexes', $collectionId.'_'.$key);
+        $index = $dbForProject->getDocument('indexes', $collectionId.'_'.$key);
 
         if (empty($index->getId())) {
             throw new Exception('Index not found', 404);
@@ -1557,10 +1534,10 @@ App::delete('/v1/database/collections/:collectionId/indexes/:key')
 
         // Only update status if removing available index
         if ($index->getAttribute('status') === 'available') {
-            $index = $dbForInternal->updateDocument('indexes', $index->getId(), $index->setAttribute('status', 'deleting'));
+            $index = $dbForProject->updateDocument('indexes', $index->getId(), $index->setAttribute('status', 'deleting'));
         }
 
-        $dbForInternal->deleteCachedDocument('collections', $collectionId);
+        $dbForProject->deleteCachedDocument('collections', $collectionId);
 
         $database
             ->setParam('type', DATABASE_TYPE_DELETE_INDEX)
@@ -1576,7 +1553,7 @@ App::delete('/v1/database/collections/:collectionId/indexes/:key')
 
         $audits
             ->setParam('event', 'database.indexes.delete')
-            ->setParam('resource', 'collection/'.$collection->getId())
+            ->setParam('resource', 'collection/'.$collectionId)
             ->setParam('data', $index->getArrayCopy())
         ;
 
@@ -1601,17 +1578,15 @@ App::post('/v1/database/collections/:collectionId/documents')
     ->param('read', null, new Permissions(), 'An array of strings with read permissions. By default only the current user is granted with read permissions. [learn more about permissions](https://appwrite.io/docs/permissions) and get a full list of available permissions.', true)
     ->param('write', null, new Permissions(), 'An array of strings with write permissions. By default only the current user is granted with write permissions. [learn more about permissions](https://appwrite.io/docs/permissions) and get a full list of available permissions.', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('user')
     ->inject('audits')
     ->inject('usage')
     ->inject('events')
     ->inject('mode')
-    ->action(function ($documentId, $collectionId, $data, $read, $write, $response, $dbForInternal, $dbForExternal, $user, $audits, $usage, $events, $mode) {
+    ->action(function ($documentId, $collectionId, $data, $read, $write, $response, $dbForProject, $user, $audits, $usage, $events, $mode) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
-        /** @var Utopia\Database\Database $dbForExternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Utopia\Database\Document $user */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
@@ -1630,8 +1605,10 @@ App::post('/v1/database/collections/:collectionId/documents')
 
         /**
          * Skip Authorization to get the collection. Needed in case of empty permissions for document level permissions.
+         * 
+         * @var Document $collection
          */
-        $collection = Authorization::skip(fn() => $dbForInternal->getDocument('collections', $collectionId));
+        $collection = Authorization::skip(fn() => $dbForProject->getDocument('collections', $collectionId));
 
         if ($collection->isEmpty() || !$collection->getAttribute('enabled')) {
             if (!($mode === APP_MODE_ADMIN && Auth::isPrivilegedUser(Authorization::getRoles()))) {
@@ -1648,7 +1625,7 @@ App::post('/v1/database/collections/:collectionId/documents')
         }
 
         $data['$collection'] = $collection->getId(); // Adding this param to make API easier for developers
-        $data['$id'] = $documentId == 'unique()' ? $dbForExternal->getId() : $documentId;
+        $data['$id'] = $documentId == 'unique()' ? $dbForProject->getId() : $documentId;
         $data['$read'] = (is_null($read) && !$user->isEmpty()) ? ['user:'.$user->getId()] : $read ?? []; //  By default set read permissions for user
         $data['$write'] = (is_null($write) && !$user->isEmpty()) ? ['user:'.$user->getId()] : $write ?? []; //  By default set write permissions for user
 
@@ -1671,10 +1648,11 @@ App::post('/v1/database/collections/:collectionId/documents')
         try {
             if ($collection->getAttribute('permission') === 'collection') {
                 /** @var Document $document */
-                $document = Authorization::skip(fn() => $dbForExternal->createDocument($collectionId, new Document($data)));
+                $document = Authorization::skip(fn() => $dbForProject->createDocument('collection_' . $collectionId, new Document($data)));
             } else {
-                $document = $dbForExternal->createDocument($collectionId, new Document($data));
+                $document = $dbForProject->createDocument('collection_' . $collectionId, new Document($data));
             }
+            $document->setAttribute('$collection', $collectionId);
         }
         catch (StructureException $exception) {
             throw new Exception($exception->getMessage(), 400);
@@ -1712,7 +1690,7 @@ App::get('/v1/database/collections/:collectionId/documents')
     ->label('sdk.response.type', Response::CONTENT_TYPE_JSON)
     ->label('sdk.response.model', Response::MODEL_DOCUMENT_LIST)
     ->param('collectionId', '', new UID(), 'Collection ID. You can create a new collection using the Database service [server integration](https://appwrite.io/docs/server/database#createCollection).')
-    ->param('queries', [], new ArrayList(new Text(128)), 'Array of query strings.', true)
+    ->param('queries', [], new ArrayList(new Text(0), 100), 'Array of query strings.', true) 
     ->param('limit', 25, new Range(0, 100), 'Maximum number of documents to return in response. By default will return maximum 25 results. Maximum of 100 results allowed per request.', true)
     ->param('offset', 0, new Range(0, APP_LIMIT_COUNT), 'Offset value. The default value is 0. Use this value to manage pagination. [learn more about pagination](https://appwrite.io/docs/pagination)', true)
     ->param('cursor', '', new UID(), 'ID of the document used as the starting point for the query, excluding the document itself. Should be used for efficient pagination when working with large sets of data. [learn more about pagination](https://appwrite.io/docs/pagination)', true)
@@ -1720,17 +1698,13 @@ App::get('/v1/database/collections/:collectionId/documents')
     ->param('orderAttributes', [], new ArrayList(new Text(128)), 'Array of attributes used to sort results.', true)
     ->param('orderTypes', [], new ArrayList(new WhiteList(['DESC', 'ASC'], true)), 'Array of order directions for sorting attribtues. Possible values are DESC for descending order, or ASC for ascending order.', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
-    ->inject('user')
+    ->inject('dbForProject')
     ->inject('usage')
     ->inject('mode')
-    ->action(function ($collectionId, $queries, $limit, $offset, $cursor, $cursorDirection, $orderAttributes, $orderTypes, $response, $dbForInternal, $dbForExternal, $user, $usage, $mode) {
+    ->action(function ($collectionId, $queries, $limit, $offset, $cursor, $cursorDirection, $orderAttributes, $orderTypes, $response, $dbForProject, $usage, $mode) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
-        /** @var Utopia\Database\Database $dbForExternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Appwrite\Stats\Stats $usage */
-        /** @var Utopia\Database\Document $user */
         /** @var string $mode */
 
         /**
@@ -1738,7 +1712,7 @@ App::get('/v1/database/collections/:collectionId/documents')
          *
          * @var Utopia\Database\Document $collection
          */
-        $collection = Authorization::skip(fn() => $dbForInternal->getDocument('collections', $collectionId));
+        $collection = Authorization::skip(fn() => $dbForProject->getDocument('collections', $collectionId));
 
         if ($collection->isEmpty() || !$collection->getAttribute('enabled')) {
             if (!($mode === APP_MODE_ADMIN && Auth::isPrivilegedUser(Authorization::getRoles()))) {
@@ -1755,7 +1729,13 @@ App::get('/v1/database/collections/:collectionId/documents')
         }
 
         $queries = \array_map(function ($query) {
-            return Query::parse($query);
+            $query = Query::parse($query);
+
+            if (\count($query->getValues()) > 100) {
+                throw new Exception("You cannot use more than 100 query values on attribute '{$query->getAttribute()}'", 400);
+            }
+
+            return $query;
         }, $queries);
 
         if (!empty($queries)) {
@@ -1767,7 +1747,9 @@ App::get('/v1/database/collections/:collectionId/documents')
 
         $cursorDocument = null;
         if (!empty($cursor)) {
-            $cursorDocument = $dbForExternal->getDocument($collectionId, $cursor);
+            $cursorDocument = $collection->getAttribute('permission') === 'collection'
+                ? Authorization::skip(fn () => $dbForProject->getDocument('collection_' . $collectionId, $cursor))
+                : $dbForProject->getDocument('collection_' . $collectionId, $cursor);
 
             if ($cursorDocument->isEmpty()) {
                 throw new Exception("Document '{$cursor}' for the 'cursor' value not found.", 400);
@@ -1776,12 +1758,17 @@ App::get('/v1/database/collections/:collectionId/documents')
 
         if ($collection->getAttribute('permission') === 'collection') {
             /** @var Document[] $documents */
-            $documents = Authorization::skip(fn() => $dbForExternal->find($collectionId, $queries, $limit, $offset, $orderAttributes, $orderTypes, $cursorDocument ?? null, $cursorDirection));
-            $sum = Authorization::skip(fn() => $dbForExternal->count($collectionId, $queries, APP_LIMIT_COUNT));
+            $documents = Authorization::skip(fn() => $dbForProject->find('collection_' . $collectionId, $queries, $limit, $offset, $orderAttributes, $orderTypes, $cursorDocument ?? null, $cursorDirection));
+            $sum = Authorization::skip(fn() => $dbForProject->count('collection_' . $collectionId, $queries, APP_LIMIT_COUNT));
         } else {
-            $documents = $dbForExternal->find($collectionId, $queries, $limit, $offset, $orderAttributes, $orderTypes, $cursorDocument ?? null, $cursorDirection);
-            $sum = $dbForExternal->count($collectionId, $queries, APP_LIMIT_COUNT);
+            $documents = $dbForProject->find('collection_' . $collectionId, $queries, $limit, $offset, $orderAttributes, $orderTypes, $cursorDocument ?? null, $cursorDirection);
+            $sum = $dbForProject->count('collection_' . $collectionId, $queries, APP_LIMIT_COUNT);
         }
+
+        /**
+         * Reset $collection attribute to remove prefix.
+         */
+        $documents = array_map(fn(Document $document) => $document->setAttribute('$collection', $collectionId), $documents);
 
         $usage
             ->setParam('database.documents.read', 1)
@@ -1808,20 +1795,18 @@ App::get('/v1/database/collections/:collectionId/documents/:documentId')
     ->param('collectionId', null, new UID(), 'Collection ID. You can create a new collection using the Database service [server integration](https://appwrite.io/docs/server/database#createCollection).')
     ->param('documentId', null, new UID(), 'Document ID.')
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('usage')
     ->inject('mode')
-    ->action(function ($collectionId, $documentId, $response, $dbForInternal, $dbForExternal, $usage, $mode) {
+    ->action(function ($collectionId, $documentId, $response, $dbForProject, $usage, $mode) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $$dbForInternal */
-        /** @var Utopia\Database\Database $dbForExternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var string $mode */
 
         /**
          * Skip Authorization to get the collection. Needed in case of empty permissions for document level permissions.
          */
-        $collection = Authorization::skip(fn() => $dbForInternal->getDocument('collections', $collectionId));
+        $collection = Authorization::skip(fn() => $dbForProject->getDocument('collections', $collectionId));
 
         if ($collection->isEmpty() || !$collection->getAttribute('enabled')) {
             if (!($mode === APP_MODE_ADMIN && Auth::isPrivilegedUser(Authorization::getRoles()))) {
@@ -1839,10 +1824,15 @@ App::get('/v1/database/collections/:collectionId/documents/:documentId')
 
         if ($collection->getAttribute('permission') === 'collection') {
             /** @var Document $document */
-            $document = Authorization::skip(fn() => $dbForExternal->getDocument($collectionId, $documentId));
+            $document = Authorization::skip(fn() => $dbForProject->getDocument('collection_' . $collectionId, $documentId));
         } else {
-            $document = $dbForExternal->getDocument($collectionId, $documentId);
+            $document = $dbForProject->getDocument('collection_' . $collectionId, $documentId);
         }
+
+        /**
+         * Reset $collection attribute to remove prefix.
+         */
+        $document->setAttribute('$collection', $collectionId);
 
         if ($document->isEmpty()) {
             throw new Exception('No document found', 404);
@@ -1872,31 +1862,29 @@ App::get('/v1/database/collections/:collectionId/documents/:documentId/logs')
     ->param('limit', 25, new Range(0, 100), 'Maximum number of logs to return in response. By default will return maximum 25 results. Maximum of 100 results allowed per request.', true)
     ->param('offset', 0, new Range(0, APP_LIMIT_COUNT), 'Offset value. The default value is 0. Use this value to manage pagination. [learn more about pagination](https://appwrite.io/docs/pagination)', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('locale')
     ->inject('geodb')
-    ->action(function ($collectionId, $documentId, $limit, $offset, $response, $dbForInternal, $dbForExternal, $locale, $geodb) {
+    ->action(function ($collectionId, $documentId, $limit, $offset, $response, $dbForProject, $locale, $geodb) {
         /** @var Appwrite\Utopia\Response $response */
         /** @var Utopia\Database\Document $project */
-        /** @var Utopia\Database\Database $dbForInternal */
-        /** @var Utopia\Database\Database $dbForExternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Utopia\Locale\Locale $locale */
         /** @var MaxMind\Db\Reader $geodb */
 
-        $collection = $dbForInternal->getDocument('collections', $collectionId);
+        $collection = $dbForProject->getDocument('collections', $collectionId);
 
         if ($collection->isEmpty()) {
             throw new Exception('Collection not found', 404);
         }
 
-        $document = $dbForExternal->getDocument($collectionId, $documentId);
+        $document = $dbForProject->getDocument('collection_' . $collectionId, $documentId);
 
         if ($document->isEmpty()) {
             throw new Exception('No document found', 404);
         }
 
-        $audit = new Audit($dbForInternal);
+        $audit = new Audit($dbForProject);
         $resource = 'document/'.$document->getId();
         $logs = $audit->getLogsByResource($resource, $limit, $offset);
 
@@ -1968,16 +1956,14 @@ App::patch('/v1/database/collections/:collectionId/documents/:documentId')
     ->param('read', null, new Permissions(), 'An array of strings with read permissions. By default inherits the existing read permissions. [learn more about permissions](https://appwrite.io/docs/permissions) and get a full list of available permissions.', true)
     ->param('write', null, new Permissions(), 'An array of strings with write permissions. By default inherits the existing write permissions. [learn more about permissions](https://appwrite.io/docs/permissions) and get a full list of available permissions.', true)
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('audits')
     ->inject('usage')
     ->inject('events')
     ->inject('mode')
-    ->action(function ($collectionId, $documentId, $data, $read, $write, $response, $dbForInternal, $dbForExternal, $audits, $usage, $events, $mode) {
+    ->action(function ($collectionId, $documentId, $data, $read, $write, $response, $dbForProject, $audits, $usage, $events, $mode) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForInternal */
-        /** @var Utopia\Database\Database $dbForExternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
         /** @var Appwrite\Event\Event $events */
@@ -1986,7 +1972,7 @@ App::patch('/v1/database/collections/:collectionId/documents/:documentId')
         /**
          * Skip Authorization to get the collection. Needed in case of empty permissions for document level permissions.
          */
-        $collection = Authorization::skip(fn() => $dbForInternal->getDocument('collections', $collectionId));
+        $collection = Authorization::skip(fn() => $dbForProject->getDocument('collections', $collectionId));
 
         if ($collection->isEmpty() || !$collection->getAttribute('enabled')) {
             if (!($mode === APP_MODE_ADMIN && Auth::isPrivilegedUser(Authorization::getRoles()))) {
@@ -2001,9 +1987,9 @@ App::patch('/v1/database/collections/:collectionId/documents/:documentId')
                 throw new Exception('Unauthorized permissions', 401);
             }
 
-            $document = Authorization::skip(fn() => $dbForExternal->getDocument($collectionId, $documentId));
+            $document = Authorization::skip(fn() => $dbForProject->getDocument('collection_' . $collectionId, $documentId));
         } else {
-            $document = $dbForExternal->getDocument($collectionId, $documentId);
+            $document = $dbForProject->getDocument('collection_' . $collectionId, $documentId);
         }
 
 
@@ -2047,10 +2033,14 @@ App::patch('/v1/database/collections/:collectionId/documents/:documentId')
         try {
             if ($collection->getAttribute('permission') === 'collection') {
                 /** @var Document $document */
-                $document = Authorization::skip(fn() => $dbForExternal->updateDocument($collection->getId(), $document->getId(), new Document($data)));
+                $document = Authorization::skip(fn() => $dbForProject->updateDocument('collection_' . $collection->getId(), $document->getId(), new Document($data)));
             } else {
-                $document = $dbForExternal->updateDocument($collection->getId(), $document->getId(), new Document($data));
+                $document = $dbForProject->updateDocument('collection_' . $collection->getId(), $document->getId(), new Document($data));
             }
+            /**
+             * Reset $collection attribute to remove prefix.
+             */
+            $document->setAttribute('$collection', $collectionId);
         }
         catch (AuthorizationException $exception) {
             throw new Exception('Unauthorized permissions', 401);
@@ -2092,15 +2082,14 @@ App::delete('/v1/database/collections/:collectionId/documents/:documentId')
     ->param('collectionId', null, new UID(), 'Collection ID. You can create a new collection using the Database service [server integration](https://appwrite.io/docs/server/database#createCollection).')
     ->param('documentId', null, new UID(), 'Document ID.')
     ->inject('response')
-    ->inject('dbForInternal')
-    ->inject('dbForExternal')
+    ->inject('dbForProject')
     ->inject('events')
     ->inject('audits')
     ->inject('usage')
     ->inject('mode')
-    ->action(function ($collectionId, $documentId, $response, $dbForInternal, $dbForExternal, $events, $audits, $usage, $mode) {
+    ->action(function ($collectionId, $documentId, $response, $dbForProject, $events, $audits, $usage, $mode) {
         /** @var Appwrite\Utopia\Response $response */
-        /** @var Utopia\Database\Database $dbForExternal */
+        /** @var Utopia\Database\Database $dbForProject */
         /** @var Appwrite\Event\Event $events */
         /** @var Appwrite\Event\Event $audits */
         /** @var Appwrite\Stats\Stats $usage */
@@ -2109,7 +2098,7 @@ App::delete('/v1/database/collections/:collectionId/documents/:documentId')
         /**
          * Skip Authorization to get the collection. Needed in case of empty permissions for document level permissions.
          */
-        $collection = Authorization::skip(fn() => $dbForInternal->getDocument('collections', $collectionId));
+        $collection = Authorization::skip(fn() => $dbForProject->getDocument('collections', $collectionId));
 
         if ($collection->isEmpty() || !$collection->getAttribute('enabled')) {
             if (!($mode === APP_MODE_ADMIN && Auth::isPrivilegedUser(Authorization::getRoles()))) {
@@ -2127,9 +2116,9 @@ App::delete('/v1/database/collections/:collectionId/documents/:documentId')
 
         if ($collection->getAttribute('permission') === 'collection') {
             /** @var Document $document */
-            $document = Authorization::skip(fn() => $dbForExternal->getDocument($collectionId, $documentId));
+            $document = Authorization::skip(fn() => $dbForProject->getDocument('collection_' . $collectionId, $documentId));
         } else {
-            $document = $dbForExternal->getDocument($collectionId, $documentId);
+            $document = $dbForProject->getDocument('collection_' . $collectionId, $documentId);
         }
 
         if ($document->isEmpty()) {
@@ -2137,12 +2126,17 @@ App::delete('/v1/database/collections/:collectionId/documents/:documentId')
         }
 
         if ($collection->getAttribute('permission') === 'collection') {
-            Authorization::skip(fn() => $dbForExternal->deleteDocument($collectionId, $documentId));
+            Authorization::skip(fn() => $dbForProject->deleteDocument('collection_' . $collectionId, $documentId));
         } else {
-            $dbForExternal->deleteDocument($collectionId, $documentId);
+            $dbForProject->deleteDocument('collection_' . $collectionId, $documentId);
         }
 
-        $dbForExternal->deleteCachedDocument($collectionId, $documentId);
+        $dbForProject->deleteCachedDocument('collection_' . $collectionId, $documentId);
+
+        /**
+         * Reset $collection attribute to remove prefix.
+         */
+        $document->setAttribute('$collection', $collectionId);
 
         $usage
             ->setParam('database.documents.delete', 1)
