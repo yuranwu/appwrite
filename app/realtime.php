@@ -468,6 +468,11 @@ $server->onOpen(function (int $connection, SwooleRequest $request) use ($server,
         }
     } finally {
         /**
+         * Cleanup unused resource.
+         */
+        App::setResource('request', fn() => null);
+        App::setResource('response', fn() => null);
+        /**
          * Put used PDO and Redis Connections back into their pools.
          */
         $register->get('dbPool')->put($db);
