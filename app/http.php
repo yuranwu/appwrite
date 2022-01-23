@@ -19,6 +19,14 @@ use Appwrite\Utopia\Request;
 use Utopia\Logger\Log;
 use Utopia\Logger\Log\User;
 
+
+\Sentry\init([
+    'dsn' => 'https://4f4b804bd02a4309a45fb64babd58ef8@o1063647.ingest.sentry.io/6054168',
+    'traces_sampler' => function (\Sentry\Tracing\SamplingContext $context): float {
+        return 0.25;
+    },
+]);
+
 $http = new Server("0.0.0.0", App::getEnv('PORT', 80));
 
 $payloadSize = max(4000000 /* 4mb */, App::getEnv('_APP_STORAGE_LIMIT', 10000000 /* 10mb */));
@@ -183,10 +191,18 @@ $http->on('request', function (SwooleRequest $swooleRequest, SwooleResponse $swo
     App::setResource('cache', fn() => $redis);
 
     try {
+        $transactionContext = new \Sentry\Tracing\TransactionContext();
+        $transactionContext->setName('API call');
+        $transaction = \Sentry\startTransaction($transactionContext);
+
+        // Setting the transaction to the current Hub allows you to retrieve it later
+        \Sentry\SentrySdk::getCurrentHub()->setSpan($transaction);
+
         Authorization::cleanRoles();
         Authorization::setRole('role:all');
-
+        
         $app->run($request, $response);
+        $transaction->finish();
     } catch (\Throwable $th) {
         $version = App::getEnv('_APP_VERSION', 'UNKNOWN');
 
