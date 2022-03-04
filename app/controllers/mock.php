@@ -100,7 +100,10 @@ App::delete('/v1/mock/tests/foo')
     ->param('x', '', new Text(100), 'Sample string param')
     ->param('y', '', new Integer(true), 'Sample numeric param')
     ->param('z', null, new ArrayList(new Text(256)), 'Sample array param')
-    ->action(function ($x, $y, $z) {
+    ->inject('response')
+    ->action(function ($x, $y, $z, $response) {
+        /** @var Utopia\Swoole\Response $response */
+        $response->noContent();
     });
 
 App::get('/v1/mock/tests/bar')
@@ -190,7 +193,10 @@ App::delete('/v1/mock/tests/bar')
     ->param('required', '', new Text(100), 'Sample string param')
     ->param('default', '', new Integer(true), 'Sample numeric param')
     ->param('z', null, new ArrayList(new Text(256)), 'Sample array param')
-    ->action(function ($required, $default, $z) {
+    ->inject('response')
+    ->action(function ($required, $default, $z, $response) {
+        /** @var Utopia\Swoole\Response $response */
+        $response->noContent();
     });
 
 App::get('/v1/mock/tests/general/download')
