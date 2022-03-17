@@ -4,6 +4,7 @@ use Ahc\Jwt\JWT;
 use Appwrite\Auth\Auth;
 use Appwrite\Event\Event;
 use Appwrite\Extend\Exception;
+use Appwrite\Network\Validator\URL;
 use Appwrite\Utopia\Database\Validator\CustomId;
 use Utopia\Database\Validator\UID;
 use Utopia\Storage\Validator\File;
@@ -1117,4 +1118,169 @@ App::post('/v1/functions/:functionId/deployments/:deploymentId/builds/:buildId')
         ]);
 
         $response->noContent();
+    });
+
+
+// Endpoint to import a function from a git repository
+App::get('/v1/functions/import')
+    ->groups(['api', 'functions'])
+    ->desc('Import Function')
+    ->label('scope', 'functions.write')
+    ->label('sdk.auth', [APP_AUTH_TYPE_SESSION, APP_AUTH_TYPE_KEY, APP_AUTH_TYPE_JWT])
+    ->label('sdk.namespace', 'functions')
+    ->label('sdk.method', 'import')
+    ->label('sdk.description', '/docs/references/functions/import.md')
+    ->label('sdk.response.code', Response::STATUS_CODE_NOCONTENT)
+    ->label('sdk.response.model', Response::MODEL_NONE)
+    ->param('repository',  '', new URL(['http', 'https']), 'Repository URL.')
+    ->inject('deviceFunctions')
+    ->inject('response')
+    ->inject('dbForProject')
+    ->inject('project')
+    ->action(function ($repository, $deviceFunctions, $response, $dbForProject, $project) {
+        /** @var Appwrite\Utopia\Response $response */
+        /** @var Utopia\Database\Database $dbForProject */
+        /** @var Utopia\Database\Document $project */
+
+        $repository = trim($repository);
+
+        if (empty($repository)) {
+            throw new Exception('Repository URL is required', 400);
+        }
+
+        $repository = str_replace('git@', 'https://', $repository);
+        $repository = str_replace('.git', '', $repository);
+
+        if (strpos($repository, 'https://') !== 0) {
+            throw new Exception('Repository URL is invalid', 400);
+        }
+
+        $appwriteJson = file_get_contents($repository . '/raw/main/appwrite.json'. '?'. time());
+
+        if (empty($appwriteJson)) {
+            throw new Exception('appwrite.json file not found', 400);
+        }
+        
+        $appwriteJson = json_decode($appwriteJson, true);
+
+        if (empty($appwriteJson)) {
+            throw new Exception('appwrite.json file is invalid', 400);
+        }
+
+        if (empty($appwriteJson['functions'])) {
+            throw new Exception('No function declared in template', 404);
+        }
+
+        $function = $appwriteJson['functions'][0];
+
+        if (empty($function['name'])) {
+            throw new Exception('Function name is required', 400);
+        }
+
+        if (empty($function['runtime'])) {
+            throw new Exception('Function runtime is required', 400);
+        }
+
+        if (empty($function['entrypoint'])) {
+            throw new Exception('Function entrypoint is required', 400);
+        }
+
+        if (empty($function['path'])) {
+            throw new Exception('Function path is required', 400);
+        }
+
+        $function['$id'] = $dbForProject->getId();
+
+        $document = $dbForProject->createDocument('functions', new Document([
+            '$id' => $function['$id'],
+            'name' => $function['name'],
+            'runtime' => $function['runtime'],
+            'dateCreated' => time(),
+            'dateUpdated' => time(),
+            'status' => 'disabled',
+            'execute' => $function['execute'] ?? [],
+            'deployment' => '',
+            'vars' => $function['vars'] ?? [],
+            'events' => $function['events'] ?? [],
+            'schedule' => $function['schedule'] ?? '',
+            'schedulePrevious' => 0,
+            'scheduleNext' => 0,
+            'timeout' => $function['timeout'] ?? 15,
+            'search' => implode(' ', [$function['$id'], $function['name'], $function['runtime']])
+        ]));
+
+        if ($document->isEmpty()) {
+            throw new Exception('Error creating function', 500);
+        }
+
+        var_dump($function);
+
+        $deploymentId = $dbForProject->getId();
+        $path = $deviceFunctions->getPath("$deploymentId.tar.gz");
+
+        // Download tarball from repository using curl to a temporary file
+        $tmpFile = tempnam(sys_get_temp_dir(), 'appwrite-import-function');
+        if (!file_exists(dirname($tmpFile))) {
+            mkdir(dirname($tmpFile), 0777, true);
+        }
+        $fp = fopen($tmpFile, 'w');
+
+        $ch = curl_init($repository . '/tarball/main');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_FILE, $fp);
+
+        $res = curl_exec($ch);
+        $error = curl_error($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        fclose($fp);
+
+        var_dump($res);
+
+        // Calculate file suze and metadata 
+        $fileSize ??= $deviceFunctions->getFileSize($tmpFile);
+        $metadata = ['content_type' => $deviceFunctions->getFileMimeType($tmpFile)];
+
+        // Move tarball to $path
+        $chunksUploaded = $deviceFunctions->move($tmpFile, $path);
+
+        if (empty($chunksUploaded)) {
+            throw new Exception('Failed moving file', 500, Exception::GENERAL_SERVER_ERROR);
+        }
+
+        $entrypoint = "{$function['path']}/{$function['entrypoint']}";
+
+        $deployment = $dbForProject->createDocument('deployments', new Document([
+            '$id' => $deploymentId,
+            '$read' => ['role:all'],
+            '$write' => ['role:all'],
+            'resourceId' => $function['$id'],
+            'resourceType' => 'functions',
+            'dateCreated' => time(),
+            'entrypoint' => $entrypoint,
+            'path' => $path,
+            'size' => $fileSize,
+            'search' => implode(' ', [$deploymentId, $entrypoint]),
+            'activate' => true,
+            'metadata' => $metadata,
+        ]));
+
+        if ($deployment->isEmpty()) {
+            throw new Exception('Error creating deployment', 500);
+        }
+
+        // Enqueue a message to start the build
+        Resque::enqueue(Event::BUILDS_QUEUE_NAME, Event::BUILDS_CLASS_NAME, [
+            'projectId' => $project->getId(),
+            'resourceId' => $function['$id'],
+            'deploymentId' => $deploymentId,
+            'type' => BUILD_TYPE_DEPLOYMENT
+        ]);
+
+        $response->json([
+            'repository' => $repository,
+            'projectId' => $project->getId(),
+            'type' => 'import'
+        ]);
     });
