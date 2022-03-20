@@ -1213,13 +1213,9 @@ App::get('/v1/functions/import')
             throw new Exception('Error creating function', 500);
         }
 
-        var_dump($function);
-
-        $deploymentId = $dbForProject->getId();
-        $path = $deviceFunctions->getPath("$deploymentId.tar.gz");
-
         // Download tarball from repository using curl to a temporary file
-        $tmpFile = tempnam(sys_get_temp_dir(), 'appwrite-import-function');
+        $tmpFile = sys_get_temp_dir() . '/appwrite/marketplace/' . $function['$id'] . '.tar.gz';
+
         if (!file_exists(dirname($tmpFile))) {
             mkdir(dirname($tmpFile), 0777, true);
         }
@@ -1236,20 +1232,52 @@ App::get('/v1/functions/import')
         curl_close($ch);
         fclose($fp);
 
+        var_dump($tmpFile);
         var_dump($res);
 
-        // Calculate file suze and metadata 
-        $fileSize ??= $deviceFunctions->getFileSize($tmpFile);
-        $metadata = ['content_type' => $deviceFunctions->getFileMimeType($tmpFile)];
+        /// Extract tarball to a temporary directory
+        $tmpDir = sys_get_temp_dir() . '/appwrite/marketplace/' . $function['$id'];
+
+        if (!file_exists($tmpDir)) {
+            mkdir($tmpDir, 0777, true);
+        }
+
+        // extract tarball to $tmpDir while stripping topmost directory
+        $stdin = '';
+        $stdout = '';
+        $stderr = '';
+        $status = Console::execute('tar -xzf ' . $tmpFile . ' -C ' . $tmpDir . ' --strip-components=1', $stdin, $stdout, $stderr);
+
+        if ($status !== 0) {
+            throw new Exception($stderr, 500);
+        }
+
+        // Compress $tmpDir . {$function['path']} to $tmpDir . {$function['path']}.tar.gz
+        $targetFolder = escapeshellarg($tmpDir . '/' . $function['path']);
+        $archivePath = $tmpDir . '/' . 'code.tar.gz';
+        $command = 'tar -czf ' . $archivePath . ' -C ' . $targetFolder . ' .';
+
+        $status = Console::execute($command, $stdin, $stdout, $stderr);
+        
+        if ($status !== 0) {
+            throw new Exception($stderr, 500);
+        }
+
+        // Calculate file size and metadata 
+        $fileSize ??= $deviceFunctions->getFileSize($archivePath);
+        $metadata = ['content_type' => $deviceFunctions->getFileMimeType($archivePath)];
+
+        $deploymentId = $dbForProject->getId();
+        $path = $deviceFunctions->getPath("$deploymentId.tar.gz");
 
         // Move tarball to $path
-        $chunksUploaded = $deviceFunctions->move($tmpFile, $path);
+        $chunksUploaded = $deviceFunctions->move($archivePath, $path);
 
         if (empty($chunksUploaded)) {
             throw new Exception('Failed moving file', 500, Exception::GENERAL_SERVER_ERROR);
         }
 
-        $entrypoint = "{$function['path']}/{$function['entrypoint']}";
+        $entrypoint = $function['entrypoint'];
 
         $deployment = $dbForProject->createDocument('deployments', new Document([
             '$id' => $deploymentId,
