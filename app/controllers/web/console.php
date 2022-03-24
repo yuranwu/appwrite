@@ -408,6 +408,7 @@ App::get('/console/functions')
 
         $page
             ->setParam('runtimes', Config::getParam('runtimes'))
+            ->setParam('marketplace', Config::getParam('marketplace'))
         ;
 
         $layout

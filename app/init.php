@@ -151,6 +151,7 @@ Config::load('platforms', __DIR__.'/config/platforms.php');
 Config::load('collections', __DIR__.'/config/collections.php');
 Config::load('runtimes', __DIR__.'/config/runtimes.php');
 Config::load('roles', __DIR__.'/config/roles.php');  // User roles and scopes
+Config::load('marketplace', __DIR__.'/config/marketplace.php');
 Config::load('scopes', __DIR__.'/config/scopes.php');  // User roles and scopes
 Config::load('services', __DIR__.'/config/services.php');  // List of services
 Config::load('variables', __DIR__.'/config/variables.php');  // List of env variables
