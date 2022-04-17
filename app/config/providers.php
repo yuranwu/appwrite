@@ -191,6 +191,16 @@ return [ // Ordered by ABC.
         'beta' => false,
         'mock' => false,
     ],
+    'trackmania' => [
+        'name' => 'Trackmania',
+        'developers' => 'https://doc.trackmania.com/web-services/auth/',
+        'icon' => 'icon-trackmania',
+        'enabled' => true,
+        'sandbox' => false,
+        'form' => false,
+        'beta' => false,
+        'mock' => false,
+    ],
     'tradeshift' => [
         'name' => 'Tradeshift',
         'developers' => 'https://developers.tradeshift.com/docs/api',
