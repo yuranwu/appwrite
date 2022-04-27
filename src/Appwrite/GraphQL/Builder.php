@@ -3,6 +3,7 @@
 namespace Appwrite\GraphQL;
 
 use Appwrite\GraphQL\Types\JsonType;
+use Appwrite\Repository\RequestMethod;
 use Appwrite\Utopia\Request;
 use Appwrite\Utopia\Response;
 use Appwrite\Utopia\Response\Model;
@@ -532,7 +533,7 @@ class Builder
         $queryFields = [];
         $mutationFields = [];
 
-        $response = new Response(null);
+        $response = $utopia->getResource('response');
 
         foreach ($utopia->getRoutes() as $httpMethod => $routes) {
             foreach ($routes as $route) {
@@ -578,9 +579,16 @@ class Builder
                             $class = Config::getParam('repositories')[$responseModel->getType()];
                             $repository = $register->get($class);
                             $reflection = new \ReflectionFunction($method);
-                            $attributes = $reflection->getAttributes(FromRequest::class);
+                            $methods = $reflection->getAttributes(RequestMethod::class);
+                            $request = $utopia->getResource('request', fresh: true);
+                            $results = [];
+                            foreach ($methods as $method) {
+                                $requestMethod = $method->getArguments()['methodName'];
+                                $methodArgs = $method->getArguments()['args'];
+                                $results[] = $request->$requestMethod(...$methodArgs);
+                            }
                             try {
-                                $resolve($repository->$method(...$args));
+                                $resolve($repository->$method(...$args, ...$results));
                             } catch (\Throwable $e) {
                                 $reject($e);
                             }

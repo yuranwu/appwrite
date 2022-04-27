@@ -28,7 +28,7 @@ App::get('/v1/locale')
         /** @var MaxMind\Db\Reader $geodb */
         /** @var Appwrite\Repository\LocaleRepository $repository */
 
-        $output = $repository->get($locale, $geodb, $request->getIp());
+        $output = $repository->get(fn() => $request->getIp());
 
         $time = (60 * 60 * 24 * 45); // 45 days cache
 

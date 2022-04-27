@@ -499,9 +499,6 @@ $register->set('cache', function () { // This is usually for our workers or CLI 
 
     return $redis;
 });
-$register->set(LocaleRepository::class, function () {
-    return new LocaleRepository();
-});
 $register->set('promiseAdapter', function () {
     return new CoroutinePromiseAdapter();
 });
@@ -603,8 +600,6 @@ App::setResource('loggerBreadcrumbs', function() {
 });
 
 App::setResource('register', fn() => $register);
-
-App::setResource('localeRepository', fn() => $register->get(LocaleRepository::class));
 
 App::setResource('layout', function($locale) {
     $layout = new View(__DIR__.'/views/layouts/default.phtml');
@@ -866,6 +861,10 @@ App::setResource('geodb', function($register) {
     /** @var Utopia\Registry\Registry $register */
     return $register->get('geodb');
 }, ['register']);
+
+App::setResource('localeRepository', function($locale, $geodb){
+    return new LocaleRepository($locale, $geodb);
+}, ['locale', 'geodb']);
 
 App::setResource('promiseAdapter', function ($register) {
     /** @var Utopia\Registry\Registry $register */
