@@ -29,6 +29,7 @@ use Appwrite\Network\Validator\Email;
 use Appwrite\Network\Validator\IP;
 use Appwrite\Network\Validator\URL;
 use Appwrite\OpenSSL\OpenSSL;
+use Appwrite\Repository\LocaleRepository;
 use Appwrite\Stats\Stats;
 use Appwrite\Utopia\View;
 use Utopia\App;
@@ -170,6 +171,7 @@ Config::load('storage-logos', __DIR__.'/config/storage/logos.php');
 Config::load('storage-mimes', __DIR__.'/config/storage/mimes.php'); 
 Config::load('storage-inputs', __DIR__.'/config/storage/inputs.php'); 
 Config::load('storage-outputs', __DIR__.'/config/storage/outputs.php');
+Config::load('repositories', __DIR__.'/config/repositories.php');
 
 $user = App::getEnv('_APP_REDIS_USER','');
 $pass = App::getEnv('_APP_REDIS_PASS','');
@@ -497,6 +499,9 @@ $register->set('cache', function () { // This is usually for our workers or CLI 
 
     return $redis;
 });
+$register->set(LocaleRepository::class, function () {
+    return new LocaleRepository();
+});
 $register->set('promiseAdapter', function () {
     return new CoroutinePromiseAdapter();
 });
@@ -598,6 +603,8 @@ App::setResource('loggerBreadcrumbs', function() {
 });
 
 App::setResource('register', fn() => $register);
+
+App::setResource('localeRepository', fn() => $register->get(LocaleRepository::class));
 
 App::setResource('layout', function($locale) {
     $layout = new View(__DIR__.'/views/layouts/default.phtml');
