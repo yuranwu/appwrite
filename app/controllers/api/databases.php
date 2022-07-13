@@ -15,7 +15,7 @@ use Utopia\Validator\JSON;
 use Utopia\Database\Database;
 use Utopia\Database\Document;
 use Utopia\Database\Query;
-use Utopia\Database\Adapter\MariaDB;
+use Utopia\Database\Adapter\MySQL;
 use Utopia\Database\Validator\Authorization;
 use Utopia\Database\Validator\Key;
 use Utopia\Database\Validator\Permissions;
@@ -1524,7 +1524,7 @@ App::post('/v1/databases/:databaseId/collections/:collectionId/indexes')
             new Query('databaseInternalId', Query::TYPE_EQUAL, [$db->getInternalId()])
         ], 61);
 
-        $limit = 64 - MariaDB::getNumberOfDefaultIndexes();
+        $limit = 64 - MySQL::getNumberOfDefaultIndexes();
 
         if ($count >= $limit) {
             throw new Exception('Index limit exceeded', 400, Exception::INDEX_LIMIT_EXCEEDED);

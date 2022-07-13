@@ -18,7 +18,7 @@ use Utopia\Logger\Log;
 use Utopia\Database\Database;
 use Utopia\Cache\Adapter\Redis as RedisCache;
 use Utopia\Cache\Cache;
-use Utopia\Database\Adapter\MariaDB;
+use Utopia\Database\Adapter\MySQL;
 use Utopia\Database\Document;
 use Utopia\Database\Query;
 use Utopia\Database\Validator\Authorization;
@@ -105,7 +105,7 @@ function getDatabase(Registry &$register, string $namespace)
             $redis = $register->get('redisPool')->get();
 
             $cache = new Cache(new RedisCache($redis));
-            $database = new Database(new MariaDB($db), $cache);
+            $database = new Database(new MySQL($db), $cache);
             $database->setDefaultDatabase(App::getEnv('_APP_DB_SCHEMA', 'appwrite'));
             $database->setNamespace($namespace);
 
@@ -381,7 +381,7 @@ $server->onOpen(function (int $connection, SwooleRequest $request) use ($server,
         $console = $app->getResource('console');
 
         $cache = new Cache(new RedisCache($redis));
-        $database = new Database(new MariaDB($db), $cache);
+        $database = new Database(new MySQL($db), $cache);
         $database->setDefaultDatabase(App::getEnv('_APP_DB_SCHEMA', 'appwrite'));
         $database->setNamespace("_{$project->getInternalId()}");
 
@@ -488,7 +488,7 @@ $server->onMessage(function (int $connection, string $message) use ($server, $re
         $redis = $register->get('redisPool')->get();
 
         $cache = new Cache(new RedisCache($redis));
-        $database = new Database(new MariaDB($db), $cache);
+        $database = new Database(new MySQL($db), $cache);
         $database->setDefaultDatabase(App::getEnv('_APP_DB_SCHEMA', 'appwrite'));
         $database->setNamespace("_console");
         $projectId = $realtime->connections[$connection]['projectId'];

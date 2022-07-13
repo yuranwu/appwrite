@@ -2020,7 +2020,7 @@ $collections = [
                 'type' => Database::INDEX_FULLTEXT,
                 'attributes' => ['search'],
                 'lengths' => [2048],
-                'orders' => [Database::ORDER_ASC],
+                'orders' => [],
             ]
         ],
     ],
@@ -2617,14 +2617,14 @@ $collections = [
                 'type' => Database::INDEX_FULLTEXT,
                 'attributes' => ['name'],
                 'lengths' => [1024],
-                'orders' => [Database::ORDER_ASC],
+                'orders' => [],
             ],
             [
                 '$id' => '_key_search',
                 'type' => Database::INDEX_FULLTEXT,
                 'attributes' => ['search'],
                 'lengths' => [2048],
-                'orders' => [Database::ORDER_ASC],
+                'orders' => [],
             ],
         ]
     ],
@@ -2963,7 +2963,7 @@ $collections = [
                 'type' => Database::INDEX_FULLTEXT,
                 'attributes' => ['search'],
                 'lengths' => [2048],
-                'orders' => [Database::ORDER_ASC],
+                'orders' => [],
             ],
             [
                 '$id' => '_key_bucket',

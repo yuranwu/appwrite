@@ -9,7 +9,7 @@ use Utopia\App;
 use Utopia\Cache\Adapter\Redis as RedisCache;
 use Utopia\Cache\Cache;
 use Utopia\CLI\Console;
-use Utopia\Database\Adapter\MariaDB;
+use Utopia\Database\Adapter\MySQL;
 use Utopia\Database\Database;
 use Utopia\Database\Validator\Authorization;
 use Utopia\Registry\Registry;
@@ -30,7 +30,7 @@ function getDatabase(Registry &$register, string $namespace): Database
             $redis = $register->get('cache');
 
             $cache = new Cache(new RedisCache($redis));
-            $database = new Database(new MariaDB($db), $cache);
+            $database = new Database(new MySQL($db), $cache);
             $database->setDefaultDatabase(App::getEnv('_APP_DB_SCHEMA', 'appwrite'));
             $database->setNamespace($namespace);
 
@@ -147,7 +147,7 @@ $cli
 
             $iterations = 0; // Reset iterations to prevent overflow when running for long time
             /**
-             * Aggregate MariaDB every 15 minutes
+             * Aggregate MySQL every 15 minutes
              * Some of the queries here might contain full-table scans.
              */
             $now = date('d-m-Y H:i:s', time());
