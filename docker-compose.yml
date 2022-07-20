@@ -76,6 +76,7 @@ services:
         - DEBUG=false
         - TESTING=true
         - VERSION=dev
+    image: appwrite_appwrite
     ports: 
       - 9501:80
     networks:
@@ -182,8 +183,7 @@ services:
     entrypoint: realtime
     <<: *x-logging
     container_name: appwrite-realtime
-    build:
-      context: .
+    image: appwrite_appwrite
     restart: unless-stopped
     ports: 
       - 9505:80
@@ -209,6 +209,7 @@ services:
       - ./src:/usr/src/code/src
       # - ./vendor:/usr/src/code/vendor
     depends_on:
+      - appwrite
       - mariadb
       - redis
     environment:
@@ -231,8 +232,7 @@ services:
     entrypoint: worker-audits
     <<: *x-logging
     container_name: appwrite-worker-audits
-    build:
-      context: .
+    image: appwrite_appwrite
     networks:
       - appwrite
     volumes:
@@ -241,6 +241,7 @@ services:
     depends_on:
       - redis
       - mariadb
+      - appwrite
     environment:
       - _APP_ENV
       - _APP_OPENSSL_KEY_V1
@@ -260,8 +261,7 @@ services:
     entrypoint: worker-webhooks
     <<: *x-logging
     container_name: appwrite-worker-webhooks
-    build:
-      context: .
+    image: appwrite_appwrite
     networks:
       - appwrite
     volumes:
@@ -271,6 +271,7 @@ services:
       - redis
       - mariadb
       - request-catcher
+      - appwrite
     environment:
       - _APP_ENV
       - _APP_OPENSSL_KEY_V1
@@ -286,13 +287,13 @@ services:
     entrypoint: worker-deletes
     <<: *x-logging
     container_name: appwrite-worker-deletes
-    build:
-      context: .
+    image: appwrite_appwrite
     networks:
       - appwrite
     depends_on:
       - redis
       - mariadb
+      - appwrite
     volumes: 
       - appwrite-uploads:/storage/uploads:rw
       - appwrite-cache:/storage/cache:rw
@@ -323,8 +324,7 @@ services:
     entrypoint: worker-databases
     <<: *x-logging
     container_name: appwrite-worker-databases
-    build:
-      context: .
+    image: appwrite_appwrite
     networks:
       - appwrite
     volumes: 
@@ -334,6 +334,7 @@ services:
     depends_on:
       - redis
       - mariadb
+      - appwrite
     environment:
       - _APP_ENV
       - _APP_OPENSSL_KEY_V1
@@ -353,8 +354,7 @@ services:
     entrypoint: worker-builds
     <<: *x-logging
     container_name: appwrite-worker-builds
-    build:
-      context: .
+    image: appwrite_appwrite
     networks:
       - appwrite
     volumes: 
@@ -363,6 +363,7 @@ services:
     depends_on:
       - redis
       - mariadb
+      - appwrite
     environment:
       - _APP_ENV
       - _APP_OPENSSL_KEY_V1
@@ -384,13 +385,13 @@ services:
     entrypoint: worker-certificates
     <<: *x-logging
     container_name: appwrite-worker-certificates
-    build:
-      context: .
+    image: appwrite_appwrite
     networks:
       - appwrite
     depends_on:
       - redis
       - mariadb
+      - appwrite
     volumes: 
       - appwrite-config:/storage/config:rw
       - appwrite-certificates:/storage/certificates:rw
@@ -418,8 +419,7 @@ services:
     entrypoint: worker-functions
     <<: *x-logging
     container_name: appwrite-worker-functions
-    build:
-      context: .
+    image: appwrite_appwrite
     networks:
       - appwrite
     volumes:
@@ -429,6 +429,7 @@ services:
       - redis
       - mariadb
       - appwrite-executor
+      - appwrite
     environment:
       - _APP_ENV
       - _APP_OPENSSL_KEY_V1
@@ -453,12 +454,7 @@ services:
     <<: *x-logging
     entrypoint: executor
     stop_signal: SIGINT
-    build:
-      context: .
-      args: 
-        - DEBUG=false
-        - TESTING=true
-        - VERSION=dev
+    image: appwrite_appwrite
     networks:
       appwrite:
       runtimes:
@@ -498,8 +494,7 @@ services:
     entrypoint: worker-mails
     <<: *x-logging
     container_name: appwrite-worker-mails
-    build:
-      context: .
+    image: appwrite_appwrite
     networks:
       - appwrite
     volumes:
@@ -508,6 +503,7 @@ services:
     depends_on:
       - redis
       - maildev
+      - appwrite
       # - smtp
     environment:
       - _APP_ENV
@@ -530,8 +526,7 @@ services:
     entrypoint: worker-messaging
     <<: *x-logging
     container_name: appwrite-worker-messaging
-    build:
-      context: .
+    image: appwrite_appwrite
     networks:
       - appwrite
     volumes:
@@ -539,6 +534,7 @@ services:
       - ./src:/usr/src/code/src
     depends_on:
       - redis
+      - appwrite
     environment:
       - _APP_ENV
       - _APP_REDIS_HOST
@@ -554,8 +550,7 @@ services:
     entrypoint: maintenance
     <<: *x-logging
     container_name: appwrite-maintenance
-    build:
-      context: .
+    image: appwrite_appwrite
     networks:
       - appwrite
     volumes:
@@ -563,6 +558,7 @@ services:
       - ./src:/usr/src/code/src
     depends_on:
       - redis
+      - appwrite
     environment:
       - _APP_ENV
       - _APP_DOMAIN
@@ -586,10 +582,7 @@ services:
     entrypoint: usage
     <<: *x-logging
     container_name: appwrite-usage
-    build:
-      context: .
-      args:
-        - DEBUG=false
+    image: appwrite_appwrite
     networks:
       - appwrite
     volumes:
@@ -599,6 +592,7 @@ services:
     depends_on:
       - influxdb
       - mariadb
+      - appwrite
     environment:
       - _APP_ENV
       - _APP_OPENSSL_KEY_V1
@@ -621,8 +615,7 @@ services:
     entrypoint: schedule
     <<: *x-logging
     container_name: appwrite-schedule
-    build:
-      context: .
+    image: appwrite_appwrite
     networks:
       - appwrite
     volumes:
@@ -630,6 +623,7 @@ services:
       - ./src:/usr/src/code/src
     depends_on:
       - redis
+      - appwrite
     environment:
       - _APP_ENV
       - _APP_REDIS_HOST
