@@ -123,6 +123,7 @@ const configDep = {
         'node_modules/prismjs/components/prism-java.min.js',
         'node_modules/prismjs/components/prism-json.min.js',
         'node_modules/prismjs/components/prism-kotlin.min.js',
+        'node_modules/prismjs/components/prism-groovy.min.js',
         'node_modules/prismjs/components/prism-markup-templating.min.js',
         'node_modules/prismjs/components/prism-php.min.js',
         'node_modules/prismjs/components/prism-powershell.min.js',
