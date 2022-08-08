@@ -41,6 +41,16 @@ services:
     image: traefik:2.7
     <<: *x-logging
     container_name: appwrite-traefik
+    labels:
+      - "traefik.http.middlewares.secure-headers.headers.framedeny=true"
+      - "traefik.http.middlewares.secure-headers.headers.stsincludesubdomains=true"
+      - "traefik.http.middlewares.secure-headers.headers.stspreload=true"
+      - "traefik.http.middlewares.secure-headers.headers.stsseconds=63072000"
+      - "traefik.http.middlewares.secure-headers.headers.contenttypenosniff=true"
+      - "traefik.http.middlewares.secure-headers.headers.accesscontrolmaxage=100"
+      - "traefik.http.middlewares.secure-headers.headers.addvaryheader=true"
+      - "traefik.http.middlewares.secure-headers.headers.contentsecuritypolicy=script-src 'self'"
+      - "traefik.http.middlewares.secure-headers.headers.referrerpolicy=origin-when-cross-origin"
     command:
       - --log.level=DEBUG
       - --api.insecure=true
@@ -89,11 +99,13 @@ services:
       - traefik.http.routers.appwrite_api_http.entrypoints=appwrite_web
       - traefik.http.routers.appwrite_api_http.rule=PathPrefix(`/`)
       - traefik.http.routers.appwrite_api_http.service=appwrite_api
+      - traefik.http.routers.appwrite_api_http.middlewares=secure-headers
       # https
       - traefik.http.routers.appwrite_api_https.entrypoints=appwrite_websecure
       - traefik.http.routers.appwrite_api_https.rule=PathPrefix(`/`)
       - traefik.http.routers.appwrite_api_https.service=appwrite_api
       - traefik.http.routers.appwrite_api_https.tls=true
+      - traefik.http.routers.appwrite_api_https.middlewares=secure-headers
     volumes:
       - appwrite-uploads:/storage/uploads:rw
       - appwrite-cache:/storage/cache:rw
@@ -196,12 +208,14 @@ services:
       - traefik.http.routers.appwrite_realtime_ws.entrypoints=appwrite_web
       - traefik.http.routers.appwrite_realtime_ws.rule=PathPrefix(`/v1/realtime`)
       - traefik.http.routers.appwrite_realtime_ws.service=appwrite_realtime
+      - traefik.http.routers.appwrite_realtime_ws.middlewares=secure-headers
       # wss
       - traefik.http.routers.appwrite_realtime_wss.entrypoints=appwrite_websecure
       - traefik.http.routers.appwrite_realtime_wss.rule=PathPrefix(`/v1/realtime`)
       - traefik.http.routers.appwrite_realtime_wss.service=appwrite_realtime
       - traefik.http.routers.appwrite_realtime_wss.tls=true
       - traefik.http.routers.appwrite_realtime_wss.tls.certresolver=dns
+      - traefik.http.routers.appwrite_realtime_wss.middlewares=secure-headers
     networks:
       - appwrite
     volumes:
