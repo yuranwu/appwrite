@@ -832,7 +832,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'domain',
@@ -970,7 +970,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
         ],
         'indexes' => [
@@ -1169,7 +1169,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'prefs',
@@ -1191,7 +1191,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'emailVerification',
@@ -1354,7 +1354,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'userAgent',
@@ -1459,7 +1459,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'providerRefreshToken',
@@ -1492,7 +1492,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'userAgent',
@@ -1797,7 +1797,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'joined',
@@ -1808,7 +1808,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'confirm',
@@ -1978,7 +1978,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'scheduleNext',
@@ -1989,7 +1989,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'timeout',
@@ -2191,7 +2191,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'endTime',
@@ -2202,7 +2202,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'duration',
@@ -2466,7 +2466,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'renewDate',
@@ -2477,7 +2477,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'attempts',
@@ -2510,7 +2510,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
         ],
         'indexes' => [
@@ -2665,7 +2665,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'period',
@@ -2740,7 +2740,7 @@ $collections = [
                 'required' => false,
                 'default' => null,
                 'array' => false,
-                'filters' => [],
+                'filters' => ['datetime']
             ],
             [
                 '$id' => 'value',
